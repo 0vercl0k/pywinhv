@@ -18,9 +18,9 @@
 #define _Inout_ /**/
 #define VOID void
 
+// Suppress a few macros not supported (__declspec(align())) / defined in the
+// context of the SWIG preprocessor.
 #define C_ASSERT(...) /**/
-
-// XXX: fix
 #define DECLSPEC_ALIGN(...) /**/
 
 // Ugly but tells SWIG to generate proxy functions to create UINT32 pointers.
@@ -28,12 +28,12 @@
 %include cpointer.i
 %pointer_functions(UINT32, PUINT32)
 
-// For dealing with __stdcall.
+// For dealing with __stdcall (CALLBACK, WINAPI).
 #define CALLBACK __stdcall
 %include windows.i
 
-// This is required to set WINAPI_FAMILY to the proper values when preprocessing
-// the below files.
+// This is required to set WINAPI_FAMILY to the proper value when preprocessing
+// the WinHv header files.
 %include <winapifamily.h>
 %include <WinHvPlatformDefs.h>
 %include <WinHvPlatform.h>
