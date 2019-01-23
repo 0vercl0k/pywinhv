@@ -25,7 +25,7 @@ _pywinhv.pyd: src\_pywinhv.c.o
 .PHONY: test
 test: _pywinhv.pyd
     @echo Testing...
-    python test.py
+    python ..\pywinhv\winhvplatform.py
 
 .PHONY: clean
 clean:

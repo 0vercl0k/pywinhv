@@ -1,11 +1,12 @@
-# Axel '0vercl0k' Souchet - 20 January 2019
-import sys
-sys.path.append('..')
+# Axel '0vercl0k' Souchet - 23 January 2019
 from pywinhv import *
+import sys
 
 getsizeof = sys.getsizeof
 
-def main(argc, argv):
+def HypervisorPresent():
+    '''Is the support for the Hypervisor Platform APIs
+    enabled?'''
     Capabilities = WHV_CAPABILITY()
     ReturnLength = new_PUINT32()
     PUINT32_assign(ReturnLength, 0)
@@ -16,8 +17,11 @@ def main(argc, argv):
         ReturnLength
     ) == 0, 'WHvGetCapability failed'
 
-    print 'HyperviorPresent:', Capabilities.HypervisorPresent == 1
+    assert PUINT32_value(ReturnLength) == 4, 'The return length should be sizeof(BOOL)'
+    return Capabilities.HypervisorPresent == 1
+
+def main(argc, argv):
+    print 'HypervisorPresent:', HypervisorPresent()
 
 if __name__ == '__main__':
     sys.exit(main(len(sys.argv), sys.argv))
-
