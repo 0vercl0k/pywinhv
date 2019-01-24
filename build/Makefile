@@ -1,4 +1,5 @@
 # Axel '0vercl0k' Souchet - 20 January 2019
+
 CC = cl.exe
 LD = link.exe
 
@@ -12,10 +13,10 @@ LDFLAGS = /DLL /nologo /debug:full $(PYTHON_LIB)\python27.lib winhvplatform.lib 
 
 all: _pywinhv.pyd test
 
+# XXX: technically from the VS shell we already have $(INCLUDE) which is a
+# comma separated string with all the include folders. Thing is, SWIG doesn't
+# sound to like it.
 src\_pywinhv.c:
-	# XXX: technically from the VS shell we already have $(INCLUDE) which is a
-	# comma separated string with all the include folders. Thing is, SWIG doesn't
-	# sound to like it.
     $(SWIG_EXE) -v -Iinc -I"$(BASE_SDK)um" -I"$(BASE_SDK)shared" -outdir ..\pywinhv -o src\_pywinhv.c -python swig\_pywinhv.i
 
 src\_pywinhv.c.o: src\_pywinhv.c
