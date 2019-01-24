@@ -4,17 +4,6 @@ import sys
 
 getsizeof = sys.getsizeof
 
-def IsHypervisorPresent():
-    '''Is the support for the Hypervisor Platform APIs
-    enabled?'''
-    Capabilities = whv.WHV_CAPABILITY()
-    Success, _, _ = WHvGetCapability(
-        whv.WHvCapabilityCodeHypervisorPresent,
-        Capabilities
-    )
-
-    return Success and Capabilities.HypervisorPresent == 1
-
 def WHvGetCapability(CapabilityCode, CapabilityBuffer):
     '''
     HRESULT
@@ -25,6 +14,14 @@ def WHvGetCapability(CapabilityCode, CapabilityBuffer):
         _In_ UINT32 CapabilityBufferSizeInBytes,
         _Out_opt_ UINT32* WrittenSizeInBytes
         );
+
+    Platform capabilities are a generic way for callers to query properties and
+    capabilities of the hypervisor, of the API implementation, and of the hardware
+    platform that the application is running on. The platform API uses these capabilities
+    to publish the availability of extended functionality of the API as well as the set
+    of features that the processor on the current system supports. Applications must
+    query the availability of a feature prior to calling the corresponding APIs or
+    allowing a VM to use a processor feature.
     '''
     CapabilityBufferSize = getsizeof(CapabilityBuffer)
     ReturnLength = whv.new_PUINT32()
@@ -53,6 +50,13 @@ def WHvCreatePartition():
     WHvCreatePartition(
         _Out_ WHV_PARTITION_HANDLE* Partition
         );
+
+    The WHvCreatePartition function creates a new partition object.
+    Creating the file object does not yet create the actual partition in the hypervisor.
+    To create the hypervisor partition, the WHvSetupPartition function needs to be called.
+    Additional properties of the partition can be configured prior to this call;
+    these properties are stored in the partition object in the VID and are applied when
+    creating the partition in the hypervisor.
     '''
     Partition = whv.new_PWHV_PARTITION_HANDLE()
     Ret = whv.WHvCreatePartition(Partition)
@@ -73,6 +77,9 @@ def WHvDeletePartition(Partition):
     WHvDeletePartition(
         _In_ WHV_PARTITION_HANDLE Partition
         );
+
+    Deleting a partition tears down the partition object and releases all resource that
+    the partition was using.
     '''
     Ret = whv.WHvDeletePartition(Partition)
     Success = Ret == 0
@@ -94,6 +101,17 @@ class WHvPartition(object):
         assert Success, 'WHvDeletePartition failed in context manager" %x.' % Ret
         # Forward the exception is we've intercepted one, otherwise s'all good.
         return not BlockHasThrown
+
+def IsHypervisorPresent():
+    '''Is the support for the Hypervisor Platform APIs
+    enabled?'''
+    Capabilities = whv.WHV_CAPABILITY()
+    Success, _, _ = WHvGetCapability(
+        whv.WHvCapabilityCodeHypervisorPresent,
+        Capabilities
+    )
+
+    return Success and Capabilities.HypervisorPresent == 1
 
 def main(argc, argv):
     HypervisorPresent = IsHypervisorPresent()
