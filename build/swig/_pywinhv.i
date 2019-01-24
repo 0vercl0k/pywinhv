@@ -23,10 +23,11 @@
 #define C_ASSERT(...) /**/
 #define DECLSPEC_ALIGN(...) /**/
 
-// Ugly but tells SWIG to generate proxy functions to create UINT32 pointers.
+// Ugly but tells SWIG to generate proxy functions to create various pointers.
 // XXX: Use typemaps.
 %include cpointer.i
 %pointer_functions(UINT32, PUINT32)
+%pointer_functions(WHV_PARTITION_HANDLE, PWHV_PARTITION_HANDLE)
 
 // For dealing with __stdcall (CALLBACK, WINAPI).
 #define CALLBACK __stdcall
