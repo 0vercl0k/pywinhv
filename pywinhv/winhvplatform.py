@@ -2,8 +2,6 @@
 import pywinhv as whv
 import sys
 
-getsizeof = sys.getsizeof
-
 def WHvGetCapability(CapabilityCode, CapabilityBuffer):
     '''
     HRESULT
@@ -23,7 +21,7 @@ def WHvGetCapability(CapabilityCode, CapabilityBuffer):
     query the availability of a feature prior to calling the corresponding APIs or
     allowing a VM to use a processor feature.
     '''
-    CapabilityBufferSize = getsizeof(CapabilityBuffer)
+    CapabilityBufferSize = len(CapabilityBuffer)
     ReturnLength = whv.new_PUINT32()
     whv.PUINT32_assign(ReturnLength, 0)
     Ret = whv.WHvGetCapability(
@@ -41,7 +39,7 @@ def WHvGetCapability(CapabilityCode, CapabilityBuffer):
 
     # Release the ReturnLength pointer.
     whv.delete_PUINT32(ReturnLength)
-    return (Success, ReturnLengthValue, Ret)
+    return (Success, ReturnLengthValue, Ret & 0xffffffff)
 
 def WHvCreatePartition():
     '''
@@ -68,7 +66,7 @@ def WHvCreatePartition():
 
     # Release the Partition pointer.
     whv.delete_PWHV_PARTITION_HANDLE(Partition)
-    return (Success, PartitionValue, Ret)
+    return (Success, PartitionValue, Ret & 0xffffffff)
 
 def WHvDeletePartition(Partition):
     '''
@@ -83,14 +81,132 @@ def WHvDeletePartition(Partition):
     '''
     Ret = whv.WHvDeletePartition(Partition)
     Success = Ret == 0
-    return (Success, Ret)
+    return (Success, Ret & 0xffffffff)
+
+def WHvSetupPartition(Partition):
+    '''
+    HRESULT
+    WINAPI
+    WHvSetupPartition(
+        _In_ WHV_PARTITION_HANDLE Partition
+        );
+
+    Setting up the partition causes the actual partition to be created in the hypervisor.
+    A partition needs to be set up prior to performing any other operation on the
+    partition after it was created by WHvCreatePartition, with exception of calling
+    WHvSetPartitionProperty to configure the initial properties of the partition.
+    '''
+    Ret = whv.WHvSetupPartition(Partition)
+    Success = Ret == 0
+    return (Success, Ret & 0xffffffff)
+
+def WHvSetPartitionProperty(Partition, PropertyCode, PropertyBuffer):
+    '''
+    HRESULT
+    WINAPI
+    WHvSetPartitionProperty(
+        _In_ WHV_PARTITION_HANDLE Partition,
+        _In_ WHV_PARTITION_PROPERTY_CODE PropertyCode,
+        _In_reads_bytes_(PropertyBufferSizeInBytes) const VOID* PropertyBuffer,
+        _In_ UINT32 PropertyBufferSizeInBytes
+        );
+    '''
+    PropertyBufferSizeInBytes = len(PropertyBuffer)
+    Ret = whv.WHvSetPartitionProperty(
+        Partition,
+        PropertyCode,
+        PropertyBuffer,
+        PropertyBufferSizeInBytes
+    )
+
+    Success = Ret == 0
+    return (Success, Ret & 0xffffffff)
+
+def WHvCreateVirtualProcessor(Partition, VpIndex):
+    '''
+    HRESULT
+    WINAPI
+    WHvCreateVirtualProcessor(
+        _In_ WHV_PARTITION_HANDLE Partition,
+        _In_ UINT32 VpIndex,
+        _In_ UINT32 Flags
+        );
+
+    The WHvCreateVirtualProcessor function creates a new virtual processor in a
+    partition. The index of the virtual processor is used to set the APIC ID of the
+    processor.
+    '''
+    Ret = whv.WHvCreateVirtualProcessor(
+        Partition,
+        VpIndex,
+        0
+    )
+
+    Success = Ret == 0
+    return (Success, Ret & 0xffffffff)
+
+def WHvRunVirtualProcessor(Partition, VpIndex):
+    '''
+    HRESULT
+    WINAPI
+    WHvRunVirtualProcessor(
+        _In_ WHV_PARTITION_HANDLE Partition,
+        _In_ UINT32 VpIndex,
+        _Out_writes_bytes_(ExitContextSizeInBytes) VOID* ExitContext,
+        _In_ UINT32 ExitContextSizeInBytes
+        );
+
+    A virtual processor is executed (i.e., is enabled to run guest code) by making a
+    call to the WHvRunVirtualProcessor function. A call to this function blocks
+    synchronously until either the virtual processor executed an operation that needs
+    to be handled by the virtualization stack (e.g., accessed memory in the GPA space
+    that is not mapped or not accessible) or the virtualization stack explicitly
+    request an exit of the function (e.g., to inject an interrupt for the virtual
+    processor or to change the state of the VM).
+    '''
+    ExitContext = whv.WHV_RUN_VP_EXIT_CONTEXT()
+    ExitContextSizeInBytes = len(ExitContext)
+    Ret = whv.WHvRunVirtualProcessor(
+        Partition,
+        VpIndex,
+        ExitContext,
+        ExitContextSizeInBytes
+    )
+
+    Success = Ret == 0
+    return (Success, ExitContext, Ret & 0xffffffff)
 
 class WHvPartition(object):
     '''Context manager for Partition.'''
-    def __init__(self):
+    def __init__(self, ProcessorCount = 1):
+        '''Create and setup a Partition object.'''
+        # Create the partition.
         Success, Partition, Ret = WHvCreatePartition()
         assert Success, 'WHvCreatePartition failed in context manager: %x.' % Ret
         self.Partition = Partition
+
+        # Set up the partition
+        Property = whv.WHV_PARTITION_PROPERTY()
+        Property.ProcessorCount = ProcessorCount
+        Success, Ret = WHvSetPartitionProperty(
+            self.Partition,
+            whv.WHvPartitionPropertyCodeProcessorCount,
+            Property
+        )
+        assert Success, 'WHvSetPartitionProperty failed in context manager: %x.' % Ret
+
+        # Activate the partition.
+        Success, Ret = WHvSetupPartition(self.Partition)
+        assert Success, 'WHvSetupPartition failed in context manager: %x.' % Ret
+
+        # Create the virtual processors
+        for VpIndex in range(ProcessorCount):
+            Success, Ret = WHvCreateVirtualProcessor(
+                self.Partition,
+                VpIndex
+            )
+            assert Success, 'WHvCreateVirtualProcessor(%d) failed in context manager: %x' % (VpIndex, Ret)
+
 
     def __enter__(self):
         return self.Partition
@@ -119,8 +235,29 @@ def main(argc, argv):
     if not HypervisorPresent:
         return 1
 
-    with WHvPartition() as Partition:
+    StructSizes = {
+        whv.WHV_RUN_VP_EXIT_CONTEXT : 144,
+        whv.WHV_CAPABILITY : 8,
+        whv.WHV_PARTITION_PROPERTY : 32
+    }
+
+    for Struct, StructSize in StructSizes.iteritems():
+        Success = len(Struct()) == StructSize
+        print 'sizeof(%s) == %d: %r' % (Struct.__name__, StructSize, Success)
+        if not Success:
+            return 1
+
+    with WHvPartition(ProcessorCount = 1) as Partition:
         print 'Partition created:', Partition
+        print 'Running VP0..'
+        Success, ExitContext, Ret = WHvRunVirtualProcessor(Partition, 0)
+        if not Success:
+            raise RuntimeError('WHvRunVirtualProcessor failed %x.' % Ret)
+
+        ExitReason = ExitContext.ExitReason
+        if not (ExitContext.ExitReason == whv.WHvRunVpExitReasonMemoryAccess):
+            raise RuntimeError('The VP did not exit with the appropriate ExitReason(%x)' % ExitReason)
+        print 'ExitReason:', ExitReason
 
     print 'All good!'
     return 0

@@ -39,3 +39,22 @@
 %include <WinHvPlatformDefs.h>
 %include <WinHvPlatform.h>
 %include <WinHvEmulation.h>
+
+// Expose a way to get the sizeof various types from Python.
+%extend WHV_RUN_VP_EXIT_CONTEXT {
+    size_t __len__() {
+        return sizeof(*$self);
+    }
+}
+
+%extend WHV_CAPABILITY {
+    size_t __len__() {
+        return sizeof(*$self);
+    }
+}
+
+%extend WHV_PARTITION_PROPERTY {
+    size_t __len__() {
+        return sizeof(*$self);
+    }
+}
