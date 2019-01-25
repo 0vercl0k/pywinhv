@@ -80,6 +80,7 @@ def WHvDeletePartition(Partition):
     the partition was using.
     '''
     Ret = whv.WHvDeletePartition(Partition)
+
     Success = Ret == 0
     return (Success, Ret & 0xffffffff)
 
@@ -97,6 +98,7 @@ def WHvSetupPartition(Partition):
     WHvSetPartitionProperty to configure the initial properties of the partition.
     '''
     Ret = whv.WHvSetupPartition(Partition)
+
     Success = Ret == 0
     return (Success, Ret & 0xffffffff)
 
@@ -145,6 +147,25 @@ def WHvCreateVirtualProcessor(Partition, VpIndex):
     Success = Ret == 0
     return (Success, Ret & 0xffffffff)
 
+def WHvDeleteVirtualProcessor(Partition, VpIndex):
+    '''
+    HRESULT
+    WINAPI
+    WHvDeleteVirtualProcessor(
+        _In_ WHV_PARTITION_HANDLE Partition,
+        _In_ UINT32 VpIndex
+        );
+
+    The WHvDeleteVirtualProcessor function deletes a virtual processor in a partition.
+    '''
+    Ret = whv.WHvDeleteVirtualProcessor(
+        Partition,
+        VpIndex
+    )
+
+    Success = Ret == 0
+    return (Success, Ret & 0xffffffff)
+
 def WHvRunVirtualProcessor(Partition, VpIndex):
     '''
     HRESULT
@@ -180,6 +201,8 @@ class WHvPartition(object):
     '''Context manager for Partition.'''
     def __init__(self, ProcessorCount = 1):
         '''Create and setup a Partition object.'''
+        self.ProcessorCount = ProcessorCount
+
         # Create the partition.
         Success, Partition, Ret = WHvCreatePartition()
         assert Success, 'WHvCreatePartition failed in context manager: %x.' % Ret
@@ -199,8 +222,8 @@ class WHvPartition(object):
         Success, Ret = WHvSetupPartition(self.Partition)
         assert Success, 'WHvSetupPartition failed in context manager: %x.' % Ret
 
-        # Create the virtual processors
-        for VpIndex in range(ProcessorCount):
+        # Create the virtual processors.
+        for VpIndex in range(self.ProcessorCount):
             Success, Ret = WHvCreateVirtualProcessor(
                 self.Partition,
                 VpIndex
@@ -213,8 +236,20 @@ class WHvPartition(object):
 
     def __exit__(self, etype, value, traceback):
         BlockHasThrown = etype is not None
+
+        # Release the VPs.
+        for VpIndex in range(self.ProcessorCount):
+            Success, Ret = WHvDeleteVirtualProcessor(
+                self.Partition,
+                VpIndex
+            )
+            assert Success, 'WHvDeleteVirtualProcessor failed in context manager" %x.' % Ret
+
+        # Release the Partition.
         Success, Ret = WHvDeletePartition(self.Partition)
         assert Success, 'WHvDeletePartition failed in context manager" %x.' % Ret
+
+
         # Forward the exception is we've intercepted one, otherwise s'all good.
         return not BlockHasThrown
 
