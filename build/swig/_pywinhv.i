@@ -58,3 +58,15 @@
         return sizeof(*$self);
     }
 }
+
+%extend WHV_REGISTER_VALUE {
+    size_t __len__() {
+        return sizeof(*$self);
+    }
+}
+
+// Expose functions to create WHV_REGISTER_NAME / WHV_REGISTER_VALUE arrays.
+%include carrays.i
+%array_class(WHV_REGISTER_NAME, WHV_REGISTER_NAME_ARRAY)
+%array_class(WHV_REGISTER_VALUE, WHV_REGISTER_VALUE_ARRAY)
+

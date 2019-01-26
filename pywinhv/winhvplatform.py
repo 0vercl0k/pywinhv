@@ -1,6 +1,7 @@
 # Axel '0vercl0k' Souchet - 23 January 2019
 import pywinhv as whv
 import sys
+from enum import Enum
 
 def WHvGetCapability(CapabilityCode, CapabilityBuffer):
     '''
@@ -197,15 +198,84 @@ def WHvRunVirtualProcessor(Partition, VpIndex):
     Success = Ret == 0
     return (Success, ExitContext, Ret & 0xffffffff)
 
+def WHvGetVirtualProcessorRegisters(Partition, VpIndex, Registers):
+    '''
+    HRESULT
+    WINAPI
+    WHvGetVirtualProcessorRegisters(
+        _In_ WHV_PARTITION_HANDLE Partition,
+        _In_ UINT32 VpIndex,
+        _In_reads_(RegisterCount) const WHV_REGISTER_NAME* RegisterNames,
+        _In_ UINT32 RegisterCount,
+        _Out_writes_(RegisterCount) WHV_REGISTER_VALUE* RegisterValues
+        );
+    '''
+    RegisterCount = len(Registers)
+    RegisterNames = whv.WHV_REGISTER_NAME_ARRAY(RegisterCount)
+    for Idx, RegisterName in enumerate(Registers):
+        RegisterNames[Idx] = RegisterName
+
+    RegisterValues = whv.WHV_REGISTER_VALUE_ARRAY(RegisterCount)
+    Ret = whv.WHvGetVirtualProcessorRegisters(
+        Partition,
+        VpIndex,
+        RegisterNames.cast(),
+        RegisterCount,
+        RegisterValues.cast()
+    )
+
+    Success = Ret == 0
+    RegisterNamesValues = {}
+    if Success:
+        for Idx, RegisterName in enumerate(Registers):
+            RegisterNamesValues[RegisterName] = RegisterValues[Idx].Reg64
+
+    return (Success, RegisterNamesValues, Ret)
+
+def WHvSetVirtualProcessorRegisters(Partition, VpIndex, Registers):
+    '''
+    HRESULT
+    WINAPI
+    WHvSetVirtualProcessorRegisters(
+        _In_ WHV_PARTITION_HANDLE Partition,
+        _In_ UINT32 VpIndex,
+        _In_reads_(RegisterCount) const WHV_REGISTER_NAME* RegisterNames,
+        _In_ UINT32 RegisterCount,
+        _In_reads_(RegisterCount) const WHV_REGISTER_VALUE* RegisterValues
+        );
+    '''
+    RegisterCount = len(Registers)
+    RegisterNames = whv.WHV_REGISTER_NAME_ARRAY(RegisterCount)
+    RegisterValues = whv.WHV_REGISTER_VALUE_ARRAY(RegisterCount)
+    for Idx, NameValue in enumerate(Registers.iteritems()):
+        Name, Value = NameValue
+        RegisterNames[Idx] = Name
+        # XXX: Not sure why RegisterValues[Idx].Reg64 = 0xdeadbeef doesnt work.
+        RegisterValue = whv.WHV_REGISTER_VALUE()
+        RegisterValue.Reg64 = Value
+        RegisterValues[Idx] = RegisterValue
+
+    Ret = whv.WHvSetVirtualProcessorRegisters(
+        Partition,
+        VpIndex,
+        RegisterNames.cast(),
+        RegisterCount,
+        RegisterValues.cast()
+    )
+
+    Success = Ret == 0
+    return (Success, Ret)
+
 class WHvPartition(object):
     '''Context manager for Partition.'''
-    def __init__(self, ProcessorCount = 1):
+    def __init__(self, Name = 'DefaultName', ProcessorCount = 1):
         '''Create and setup a Partition object.'''
         self.ProcessorCount = ProcessorCount
+        self.Name = Name
 
         # Create the partition.
         Success, Partition, Ret = WHvCreatePartition()
-        assert Success, 'WHvCreatePartition failed in context manager: %x.' % Ret
+        assert Success, 'WHvCreatePartition failed in context manager with %x.' % Ret
         self.Partition = Partition
 
         # Set up the partition
@@ -216,11 +286,11 @@ class WHvPartition(object):
             whv.WHvPartitionPropertyCodeProcessorCount,
             Property
         )
-        assert Success, 'WHvSetPartitionProperty failed in context manager: %x.' % Ret
+        assert Success, 'WHvSetPartitionProperty failed in context manager with %x.' % Ret
 
         # Activate the partition.
         Success, Ret = WHvSetupPartition(self.Partition)
-        assert Success, 'WHvSetupPartition failed in context manager: %x.' % Ret
+        assert Success, 'WHvSetupPartition failed in context manager with %x.' % Ret
 
         # Create the virtual processors.
         for VpIndex in range(self.ProcessorCount):
@@ -228,11 +298,10 @@ class WHvPartition(object):
                 self.Partition,
                 VpIndex
             )
-            assert Success, 'WHvCreateVirtualProcessor(%d) failed in context manager: %x' % (VpIndex, Ret)
-
+            assert Success, 'WHvCreateVirtualProcessor(%d) failed in context manager with %x' % (VpIndex, Ret)
 
     def __enter__(self):
-        return self.Partition
+        return self
 
     def __exit__(self, etype, value, traceback):
         BlockHasThrown = etype is not None
@@ -243,15 +312,82 @@ class WHvPartition(object):
                 self.Partition,
                 VpIndex
             )
-            assert Success, 'WHvDeleteVirtualProcessor failed in context manager" %x.' % Ret
+            assert Success, 'WHvDeleteVirtualProcessor failed in context manager with %x.' % Ret
 
         # Release the Partition.
         Success, Ret = WHvDeletePartition(self.Partition)
-        assert Success, 'WHvDeletePartition failed in context manager" %x.' % Ret
-
+        assert Success, 'WHvDeletePartition failed in context manager with %x.' % Ret
 
         # Forward the exception is we've intercepted one, otherwise s'all good.
         return not BlockHasThrown
+
+    def __repr__(self):
+        return 'Partition(%s, ProcessorCount=%d)' % (
+            self.Name,
+            self.ProcessorCount
+        )
+
+    def RunVp(self, VpIndex):
+        '''Run the virtual processor'''
+        Success, ExitContext, Ret = WHvRunVirtualProcessor(
+            self.Partition, VpIndex
+        )
+
+        if not Success:
+            raise RuntimeError('WHvRunVirtualProcessor failed with %x.' % Ret)
+
+        return ExitContext
+
+    def SetRegisters(self, VpIndex, Registers):
+        '''Set registers in a VP'''
+        Success, Ret = WHvSetVirtualProcessorRegisters(
+            self.Partition,
+            VpIndex,
+            Registers
+        )
+
+        assert Success, 'WHvSetVirtualProcessorRegisters failed with %x.' % Ret
+
+    def SetRip(self, VpIndex, Rip):
+        '''Set the @rip register of a VP'''
+        return self.SetRegisters(
+            VpIndex, {
+                whv.WHvX64RegisterRip: Rip
+            }
+        )
+
+    def GetRegisters(self, VpIndex, Registers):
+        '''Get registers of a VP'''
+        Success, Registers, Ret = WHvGetVirtualProcessorRegisters(
+            self.Partition,
+            VpIndex,
+            Registers
+        )
+
+        assert Success, 'GetRegisters failed with %x.' % Ret
+        return Registers
+
+    def GetRip(self, VpIndex):
+        '''Get the @rip register of a VP'''
+        return self.GetRegisters(
+            VpIndex,
+            [whv.WHvX64RegisterRip]
+        )[whv.WHvX64RegisterRip]
+
+class WHvExitReason(Enum):
+    WHvRunVpExitReasonNone = 0x00000000
+    WHvRunVpExitReasonMemoryAccess = 0x00000001
+    WHvRunVpExitReasonX64IoPortAccess = 0x00000002
+    WHvRunVpExitReasonUnrecoverableException = 0x00000004
+    WHvRunVpExitReasonInvalidVpRegisterValue = 0x00000005
+    WHvRunVpExitReasonUnsupportedFeature = 0x00000006
+    WHvRunVpExitReasonX64InterruptWindow = 0x00000007
+    WHvRunVpExitReasonX64Halt = 0x00000008
+    WHvRunVpExitReasonX64ApicEoi = 0x00000009
+    WHvRunVpExitReasonX64MsrAccess = 0x00001000
+    WHvRunVpExitReasonX64Cpuid = 0x00001001
+    WHvRunVpExitReasonException = 0x00001002
+    WHvRunVpExitReasonCanceled = 0x00002001
 
 def IsHypervisorPresent():
     '''Is the support for the Hypervisor Platform APIs
@@ -273,7 +409,8 @@ def main(argc, argv):
     StructSizes = {
         whv.WHV_RUN_VP_EXIT_CONTEXT : 144,
         whv.WHV_CAPABILITY : 8,
-        whv.WHV_PARTITION_PROPERTY : 32
+        whv.WHV_PARTITION_PROPERTY : 32,
+        whv.WHV_REGISTER_VALUE : 16
     }
 
     for Struct, StructSize in StructSizes.iteritems():
@@ -284,15 +421,24 @@ def main(argc, argv):
 
     with WHvPartition(ProcessorCount = 1) as Partition:
         print 'Partition created:', Partition
-        print 'Running VP0..'
-        Success, ExitContext, Ret = WHvRunVirtualProcessor(Partition, 0)
-        if not Success:
-            raise RuntimeError('WHvRunVirtualProcessor failed %x.' % Ret)
 
-        ExitReason = ExitContext.ExitReason
-        if not (ExitContext.ExitReason == whv.WHvRunVpExitReasonMemoryAccess):
-            raise RuntimeError('The VP did not exit with the appropriate ExitReason(%x)' % ExitReason)
-        print 'ExitReason:', ExitReason
+        InitialRip = Partition.GetRip(0)
+        assert InitialRip == 0xfff0, 'The initial RIP(%x) does not match with expected value.' % InitialRip
+        print 'Initial @rip in VP0:', hex(InitialRip)
+
+        Partition.SetRip(0, 0xdeadbeefbaadc0de)
+        Rip = Partition.GetRip(0)
+        print '@rip in VP0:', hex(Rip)
+
+        ExitContext = Partition.RunVp(0)
+        ExitReason = WHvExitReason(ExitContext.ExitReason)
+        if not (ExitReason.value == whv.WHvRunVpExitReasonInvalidVpRegisterValue):
+            raise RuntimeError('The VP did not exit with the appropriate ExitReason(%r)' % ExitReason)
+        print 'Partition exited with:', ExitReason
+
+        Rip = Partition.GetRip(0)
+        assert Rip == 0xdeadbeefbaadc0de, 'The @rip(%x) register in VP0 sounds bogus.' % Rip
+        print '@rip after run:', hex(Rip)
 
     print 'All good!'
     return 0
