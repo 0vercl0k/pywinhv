@@ -228,7 +228,7 @@ def WHvGetVirtualProcessorRegisters(Partition, VpIndex, Registers):
     RegisterNamesValues = {}
     if Success:
         for Idx, RegisterName in enumerate(Registers):
-            RegisterNamesValues[RegisterName] = RegisterValues[Idx].Reg64
+            RegisterNamesValues[RegisterName] = RegisterValues[Idx]
 
     return (Success, RegisterNamesValues, Ret)
 
@@ -376,7 +376,90 @@ class WHvPartition(object):
         return self.GetRegisters(
             VpIndex,
             [whv.WHvX64RegisterRip]
-        )[whv.WHvX64RegisterRip]
+        )[whv.WHvX64RegisterRip].Reg64
+
+    def DumpRegisters(self, VpIndex):
+        '''Dump the register of a VP'''
+        Registers = self.GetRegisters(
+            VpIndex, [
+                whv.WHvX64RegisterRax, whv.WHvX64RegisterRbx, whv.WHvX64RegisterRcx,
+                whv.WHvX64RegisterRdx, whv.WHvX64RegisterRsi, whv.WHvX64RegisterRdi,
+                whv.WHvX64RegisterRip, whv.WHvX64RegisterRsp, whv.WHvX64RegisterRbp,
+                whv.WHvX64RegisterR8, whv.WHvX64RegisterR9, whv.WHvX64RegisterR10,
+                whv.WHvX64RegisterRax, whv.WHvX64RegisterRbx, whv.WHvX64RegisterRcx,
+                whv.WHvX64RegisterR11, whv.WHvX64RegisterR12, whv.WHvX64RegisterR13,
+                whv.WHvX64RegisterR14, whv.WHvX64RegisterR15,
+                whv.WHvX64RegisterCs, whv.WHvX64RegisterSs, whv.WHvX64RegisterDs,
+                whv.WHvX64RegisterEs, whv.WHvX64RegisterFs, whv.WHvX64RegisterGs,
+                whv.WHvX64RegisterRflags
+            ]
+        )
+
+        print 'rax=%016x rbx=%016x rcx=%016x' % (
+            Registers[whv.WHvX64RegisterRax].Reg64,
+            Registers[whv.WHvX64RegisterRbx].Reg64,
+            Registers[whv.WHvX64RegisterRcx].Reg64
+        )
+
+        print 'rdx=%016x rsi=%016x rdi=%016x' % (
+            Registers[whv.WHvX64RegisterRdx].Reg64,
+            Registers[whv.WHvX64RegisterRsi].Reg64,
+            Registers[whv.WHvX64RegisterRdi].Reg64
+        )
+
+        print 'rip=%016x rsp=%016x rbp=%016x' % (
+            Registers[whv.WHvX64RegisterRip].Reg64,
+            Registers[whv.WHvX64RegisterRsp].Reg64,
+            Registers[whv.WHvX64RegisterRbp].Reg64
+        )
+
+        print ' r8=%016x  r9=%016x r10=%016x' % (
+            Registers[whv.WHvX64RegisterR8].Reg64,
+            Registers[whv.WHvX64RegisterR9].Reg64,
+            Registers[whv.WHvX64RegisterR10].Reg64
+        )
+
+        print 'r11=%016x r12=%016x r13=%016x' % (
+            Registers[whv.WHvX64RegisterR11].Reg64,
+            Registers[whv.WHvX64RegisterR12].Reg64,
+            Registers[whv.WHvX64RegisterR13].Reg64
+        )
+
+        print 'r14=%016x r15=%016x' % (
+            Registers[whv.WHvX64RegisterR14].Reg64,
+            Registers[whv.WHvX64RegisterR15].Reg64
+        )
+
+        Rflags = Registers[whv.WHvX64RegisterRflags].Reg64
+        print 'iopl=%x %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s' % (
+            (Rflags >> 12) & 3,
+            'cs' if ((Rflags >> 0x00) & 1) else '   ',
+            'pf' if ((Rflags >> 0x02) & 1) else '   ',
+            'af' if ((Rflags >> 0x04) & 1) else '   ',
+            'zf' if ((Rflags >> 0x06) & 1) else '   ',
+            'sf' if ((Rflags >> 0x07) & 1) else '   ',
+            'tf' if ((Rflags >> 0x08) & 1) else '   ',
+            'if' if ((Rflags >> 0x09) & 1) else '   ',
+            'df' if ((Rflags >> 0x0a) & 1) else '   ',
+            'of' if ((Rflags >> 0x0b) & 1) else '   ',
+            'nt' if ((Rflags >> 0x0e) & 1) else '   ',
+            'rf' if ((Rflags >> 0x10) & 1) else '   ',
+            'vm' if ((Rflags >> 0x11) & 1) else '   ',
+            'ac' if ((Rflags >> 0x12) & 1) else '   ',
+            'vif' if ((Rflags >> 0x13) & 1) else '    ',
+            'vip' if ((Rflags >> 0x14) & 1) else '    ',
+            'id' if ((Rflags >> 0x15) & 1) else '   ',
+        )
+
+        print 'cs=%04x ss=%04x ds=%04x es=%04x fs=%04x gs=%04x   efl=%08x' % (
+            Registers[whv.WHvX64RegisterCs].Segment.Selector,
+            Registers[whv.WHvX64RegisterSs].Segment.Selector,
+            Registers[whv.WHvX64RegisterDs].Segment.Selector,
+            Registers[whv.WHvX64RegisterEs].Segment.Selector,
+            Registers[whv.WHvX64RegisterFs].Segment.Selector,
+            Registers[whv.WHvX64RegisterGs].Segment.Selector,
+            Rflags
+        )
 
 class WHvExitReason(Enum):
     WHvRunVpExitReasonNone = 0x00000000
@@ -443,7 +526,7 @@ def main(argc, argv):
 
         Rip = Partition.GetRip(0)
         assert Rip == 0xdeadbeefbaadc0de, 'The @rip(%x) register in VP0 sounds bogus.' % Rip
-        print '@rip after run:', hex(Rip)
+        Partition.DumpRegisters(0)
 
     print 'All good!'
     return 0
