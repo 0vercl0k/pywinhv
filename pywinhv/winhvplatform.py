@@ -250,7 +250,11 @@ def WHvSetVirtualProcessorRegisters(Partition, VpIndex, Registers):
     for Idx, NameValue in enumerate(Registers.iteritems()):
         Name, Value = NameValue
         RegisterNames[Idx] = Name
-        # XXX: Not sure why RegisterValues[Idx].Reg64 = 0xdeadbeef doesnt work.
+        # Note: We cannot initialize the array using the 'RegisterValues[Idx].Reg64 = x'
+        # construct because the WHV_REGISTER_NAME_ARRAY__getitem__ routines returns
+        # a copy (new buffer) instead of a pointer to the structure we want to initialize.
+        # What this mean is that the above statement end up not initializing RegisterValues[Idx]
+        # but a copy of it. Kinda annoying.
         RegisterValue = whv.WHV_REGISTER_VALUE()
         RegisterValue.Reg64 = Value
         RegisterValues[Idx] = RegisterValue
@@ -423,18 +427,19 @@ def main(argc, argv):
         print 'Partition created:', Partition
 
         InitialRip = Partition.GetRip(0)
-        assert InitialRip == 0xfff0, 'The initial RIP(%x) does not match with expected value.' % InitialRip
+        assert InitialRip == 0xfff0, 'The initial @rip(%x) does not match with expected value.' % InitialRip
         print 'Initial @rip in VP0:', hex(InitialRip)
 
         Partition.SetRip(0, 0xdeadbeefbaadc0de)
         Rip = Partition.GetRip(0)
         print '@rip in VP0:', hex(Rip)
+        assert Rip == 0xdeadbeefbaadc0de, '@rip(%x) does not match what we assigned to it.' % Rip
 
         ExitContext = Partition.RunVp(0)
         ExitReason = WHvExitReason(ExitContext.ExitReason)
+        print 'Partition exited with:', ExitReason
         if not (ExitReason.value == whv.WHvRunVpExitReasonInvalidVpRegisterValue):
             raise RuntimeError('The VP did not exit with the appropriate ExitReason(%r)' % ExitReason)
-        print 'Partition exited with:', ExitReason
 
         Rip = Partition.GetRip(0)
         assert Rip == 0xdeadbeefbaadc0de, 'The @rip(%x) register in VP0 sounds bogus.' % Rip
