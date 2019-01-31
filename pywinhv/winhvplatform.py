@@ -1,7 +1,23 @@
 # Axel '0vercl0k' Souchet - 23 January 2019
 import pywinhv as whv
+import ctypes as ct
+from ctypes.wintypes import LPVOID, DWORD, c_size_t as SIZE_T
 import sys
 from enum import Enum
+
+ct.windll.kernel32.VirtualAlloc.argtypes = (LPVOID, SIZE_T, DWORD, DWORD)
+ct.windll.kernel32.VirtualAlloc.restype = LPVOID
+VirtualAlloc = ct.windll.kernel32.VirtualAlloc
+
+MEM_COMMIT = 0x00001000
+MEM_RESERVE = 0x00002000
+PAGE_READWRITE = 0x04
+
+def Align2Page(Size):
+    '''Align the size to the next page size'''
+    if (Size % 0x1000) == 0:
+        return Size
+    return ((Size / 0x1000) + 1) * 0x1000
 
 def WHvGetCapability(CapabilityCode, CapabilityBuffer):
     '''
@@ -225,12 +241,12 @@ def WHvGetVirtualProcessorRegisters(Partition, VpIndex, Registers):
     )
 
     Success = Ret == 0
-    RegisterNamesValues = {}
+    Values = []
     if Success:
-        for Idx, RegisterName in enumerate(Registers):
-            RegisterNamesValues[RegisterName] = RegisterValues[Idx]
+        for Idx in range(RegisterCount):
+            Values.append(RegisterValues[Idx])
 
-    return (Success, RegisterNamesValues, Ret)
+    return (Success, Values, Ret & 0xffffffff)
 
 def WHvSetVirtualProcessorRegisters(Partition, VpIndex, Registers):
     '''
@@ -255,8 +271,11 @@ def WHvSetVirtualProcessorRegisters(Partition, VpIndex, Registers):
         # a copy (new buffer) instead of a pointer to the structure we want to initialize.
         # What this mean is that the above statement end up not initializing RegisterValues[Idx]
         # but a copy of it. Kinda annoying.
-        RegisterValue = whv.WHV_REGISTER_VALUE()
-        RegisterValue.Reg64 = Value
+        if isinstance(Value, whv.WHV_REGISTER_VALUE):
+            RegisterValue = Value
+        else:
+            RegisterValue = whv.WHV_REGISTER_VALUE()
+            RegisterValue.Reg64 = Value
         RegisterValues[Idx] = RegisterValue
 
     Ret = whv.WHvSetVirtualProcessorRegisters(
@@ -268,29 +287,130 @@ def WHvSetVirtualProcessorRegisters(Partition, VpIndex, Registers):
     )
 
     Success = Ret == 0
-    return (Success, Ret)
+    return (Success, Ret & 0xffffffff)
+
+def WHvMapGpaRange(Partition, SourceAddress, GuestAddress, SizeInBytes, FlagsStr):
+    '''
+    HRESULT
+    WINAPI
+    WHvMapGpaRange(
+        _In_ WHV_PARTITION_HANDLE Partition,
+        _In_ VOID* SourceAddress,
+        _In_ WHV_GUEST_PHYSICAL_ADDRESS GuestAddress,
+        _In_ UINT64 SizeInBytes,
+        _In_ WHV_MAP_GPA_RANGE_FLAGS Flags
+        );
+
+    Creating a mapping for a range in the GPA space of a partition sets a region in the
+    caller's process as the backing memory for that range. The operation replaces any
+    previous mappings for the specified GPA pages.
+    '''
+    FlagsStr = FlagsStr.lower()
+    Flags = whv.WHvMapGpaRangeFlagNone
+    if 'r' in FlagsStr:
+        Flags |= whv.WHvMapGpaRangeFlagRead
+
+    if 'w' in FlagsStr:
+        Flags |= whv.WHvMapGpaRangeFlagWrite
+
+    if 'x' in FlagsStr:
+        Flags |= whv.WHvMapGpaRangeFlagExecute
+
+    if 'd' in FlagsStr:
+        Flags |= whv.WHvMapGpaRangeFlagTrackDirtyPages
+
+    assert (SourceAddress & 0xfff) == 0, 'SourceAddress(%x) needs to be page aligned.' % SourceAddress
+    assert (SizeInBytes % 0x1000) == 0, 'SizeInBytes(%x) needs to be page aligned.' % SizeInBytes
+
+    Ret = whv.WHvMapGpaRange(
+        Partition,
+        whv.uint2pvoid(SourceAddress),
+        GuestAddress,
+        SizeInBytes,
+        Flags
+    )
+
+    Success = Ret == 0
+    return (Success, Ret & 0xffffffff)
+
+def WHvUnmapGpaRange(Partition, GuestAddress, SizeInBytes):
+    '''
+    HRESULT
+    WINAPI
+    WHvUnmapGpaRange(
+        _In_ WHV_PARTITION_HANDLE Partition,
+        _In_ WHV_GUEST_PHYSICAL_ADDRESS GuestAddress,
+        _In_ UINT64 SizeInBytes
+        );
+
+    Unmapping a previously mapped GPA range makes the memory range unavailable to the
+    partition. Any further access by a virtual processor to the range will result in a
+    memory access exit.
+    '''
+    assert (SourceAddress & 0xfff) == 0, 'SourceAddress(%x) needs to be page aligned.' % SourceAddress
+    assert (SizeInBytes % 0x1000) == 0, 'SizeInBytes(%x) needs to be page aligned.' % SizeInBytes
+
+    Ret = whv.WHvUnmapGpaRange(
+        Partition,
+        whv.uint2pvoid(GuestAddress),
+        SizeInBytes,
+    )
+
+    Success = Ret == 0
+    return (Success, Ret & 0xffffffff)
+
+def IsHypervisorPresent():
+    '''Is the support for the Hypervisor Platform APIs
+    enabled?'''
+    Capabilities = whv.WHV_CAPABILITY()
+    Success, _, _ = WHvGetCapability(
+        whv.WHvCapabilityCodeHypervisorPresent,
+        Capabilities
+    )
+
+    return Success and Capabilities.HypervisorPresent == 1
 
 class WHvPartition(object):
     '''Context manager for Partition.'''
-    def __init__(self, Name = 'DefaultName', ProcessorCount = 1):
+    def __init__(self, **kwargs):
         '''Create and setup a Partition object.'''
-        self.ProcessorCount = ProcessorCount
-        self.Name = Name
+        assert IsHypervisorPresent(), 'The hypervisor platform APIs support must be turned on.'
+        self.ProcessorCount = kwargs.get('ProcessorCount', 1)
+        self.Name = kwargs.get('Name', 'DefaultName')
+        self.ExceptionExitBitmap = kwargs.get('ExceptionExitBitmap', 0)
 
         # Create the partition.
         Success, Partition, Ret = WHvCreatePartition()
         assert Success, 'WHvCreatePartition failed in context manager with %x.' % Ret
         self.Partition = Partition
 
-        # Set up the partition
+        # Set-up the partition with a number of VPs.
         Property = whv.WHV_PARTITION_PROPERTY()
-        Property.ProcessorCount = ProcessorCount
+        Property.ProcessorCount = self.ProcessorCount
         Success, Ret = WHvSetPartitionProperty(
             self.Partition,
             whv.WHvPartitionPropertyCodeProcessorCount,
             Property
         )
-        assert Success, 'WHvSetPartitionProperty failed in context manager with %x.' % Ret
+        assert Success, 'WHvSetPartitionProperty(ProcessorCount) failed in context manager with %x.' % Ret
+
+        # Enable Exception vmexits.
+        #Property.ExtendedVmExits.ExceptionExit = 1
+        #Success, Ret = WHvSetPartitionProperty(
+        #    self.Partition,
+        #    whv.WHvPartitionPropertyCodeExtendedVmExits,
+        #    Property
+        #)
+        #assert Success, 'WHvSetPartitionProperty(ExtendedVmExits) failed in context manager with %x.' % Ret
+
+        ## Configure the ExceptionExitBitmap
+        #Property.ExceptionExitBitmap = self.ExceptionExitBitmap
+        #Success, Ret = WHvSetPartitionProperty(
+        #    self.Partition,
+        #    whv.WHvPartitionPropertyCodeExceptionExitBitmap,
+        #    Property
+        #)
+        #assert Success, 'WHvSetPartitionProperty(ExitBitmap) failed in context manager with %x.' % Ret
 
         # Activate the partition.
         Success, Ret = WHvSetupPartition(self.Partition)
@@ -302,7 +422,7 @@ class WHvPartition(object):
                 self.Partition,
                 VpIndex
             )
-            assert Success, 'WHvCreateVirtualProcessor(%d) failed in context manager with %x' % (VpIndex, Ret)
+            assert Success, 'WHvCreateVirtualProcessor(%d) failed in context manager with %x.' % (VpIndex, Ret)
 
     def __enter__(self):
         return self
@@ -326,13 +446,13 @@ class WHvPartition(object):
         return not BlockHasThrown
 
     def __repr__(self):
-        return 'Partition(%s, ProcessorCount=%d)' % (
+        return 'Partition(%r, ProcessorCount=%d)' % (
             self.Name,
             self.ProcessorCount
         )
 
     def RunVp(self, VpIndex):
-        '''Run the virtual processor'''
+        '''Run the virtual processor.'''
         Success, ExitContext, Ret = WHvRunVirtualProcessor(
             self.Partition, VpIndex
         )
@@ -343,7 +463,7 @@ class WHvPartition(object):
         return ExitContext
 
     def SetRegisters(self, VpIndex, Registers):
-        '''Set registers in a VP'''
+        '''Set registers in a VP.'''
         Success, Ret = WHvSetVirtualProcessorRegisters(
             self.Partition,
             VpIndex,
@@ -360,8 +480,8 @@ class WHvPartition(object):
             }
         )
 
-    def GetRegisters(self, VpIndex, Registers):
-        '''Get registers of a VP'''
+    def GetRegisters(self, VpIndex, Registers, Reg64 = False):
+        '''Get registers of a VP.'''
         Success, Registers, Ret = WHvGetVirtualProcessorRegisters(
             self.Partition,
             VpIndex,
@@ -369,24 +489,33 @@ class WHvPartition(object):
         )
 
         assert Success, 'GetRegisters failed with %x.' % Ret
+        if Reg64:
+            Registers = map(
+                lambda R: R.Reg64,
+                Registers
+            )
+
         return Registers
 
+    def GetRegisters64(self, VpIndex, Registers):
+        '''Get registers of a VP and return the .Reg64 part.'''
+        return self.GetRegisters(VpIndex, Registers, Reg64 = True)
+
     def GetRip(self, VpIndex):
-        '''Get the @rip register of a VP'''
-        return self.GetRegisters(
+        '''Get the @rip register of a VP.'''
+        return self.GetRegisters64(
             VpIndex,
             [whv.WHvX64RegisterRip]
-        )[whv.WHvX64RegisterRip].Reg64
+        )[0]
 
     def DumpRegisters(self, VpIndex):
-        '''Dump the register of a VP'''
-        Registers = self.GetRegisters(
+        '''Dump the register of a VP.'''
+        R = self.GetRegisters(
             VpIndex, [
                 whv.WHvX64RegisterRax, whv.WHvX64RegisterRbx, whv.WHvX64RegisterRcx,
                 whv.WHvX64RegisterRdx, whv.WHvX64RegisterRsi, whv.WHvX64RegisterRdi,
                 whv.WHvX64RegisterRip, whv.WHvX64RegisterRsp, whv.WHvX64RegisterRbp,
                 whv.WHvX64RegisterR8, whv.WHvX64RegisterR9, whv.WHvX64RegisterR10,
-                whv.WHvX64RegisterRax, whv.WHvX64RegisterRbx, whv.WHvX64RegisterRcx,
                 whv.WHvX64RegisterR11, whv.WHvX64RegisterR12, whv.WHvX64RegisterR13,
                 whv.WHvX64RegisterR14, whv.WHvX64RegisterR15,
                 whv.WHvX64RegisterCs, whv.WHvX64RegisterSs, whv.WHvX64RegisterDs,
@@ -396,41 +525,30 @@ class WHvPartition(object):
         )
 
         print 'rax=%016x rbx=%016x rcx=%016x' % (
-            Registers[whv.WHvX64RegisterRax].Reg64,
-            Registers[whv.WHvX64RegisterRbx].Reg64,
-            Registers[whv.WHvX64RegisterRcx].Reg64
+            R[0].Reg64, R[1].Reg64, R[2].Reg64
         )
 
         print 'rdx=%016x rsi=%016x rdi=%016x' % (
-            Registers[whv.WHvX64RegisterRdx].Reg64,
-            Registers[whv.WHvX64RegisterRsi].Reg64,
-            Registers[whv.WHvX64RegisterRdi].Reg64
+            R[3].Reg64, R[4].Reg64, R[5].Reg64
         )
 
         print 'rip=%016x rsp=%016x rbp=%016x' % (
-            Registers[whv.WHvX64RegisterRip].Reg64,
-            Registers[whv.WHvX64RegisterRsp].Reg64,
-            Registers[whv.WHvX64RegisterRbp].Reg64
+            R[6].Reg64, R[7].Reg64, R[8].Reg64
         )
 
         print ' r8=%016x  r9=%016x r10=%016x' % (
-            Registers[whv.WHvX64RegisterR8].Reg64,
-            Registers[whv.WHvX64RegisterR9].Reg64,
-            Registers[whv.WHvX64RegisterR10].Reg64
+            R[9].Reg64, R[10].Reg64, R[11].Reg64
         )
 
         print 'r11=%016x r12=%016x r13=%016x' % (
-            Registers[whv.WHvX64RegisterR11].Reg64,
-            Registers[whv.WHvX64RegisterR12].Reg64,
-            Registers[whv.WHvX64RegisterR13].Reg64
+            R[12].Reg64, R[13].Reg64, R[14].Reg64
         )
 
         print 'r14=%016x r15=%016x' % (
-            Registers[whv.WHvX64RegisterR14].Reg64,
-            Registers[whv.WHvX64RegisterR15].Reg64
+            R[15].Reg64, R[16].Reg64
         )
 
-        Rflags = Registers[whv.WHvX64RegisterRflags].Reg64
+        Rflags = R[23].Reg64
         print 'iopl=%x %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s' % (
             (Rflags >> 12) & 3,
             'cs' if ((Rflags >> 0x00) & 1) else '   ',
@@ -452,14 +570,67 @@ class WHvPartition(object):
         )
 
         print 'cs=%04x ss=%04x ds=%04x es=%04x fs=%04x gs=%04x   efl=%08x' % (
-            Registers[whv.WHvX64RegisterCs].Segment.Selector,
-            Registers[whv.WHvX64RegisterSs].Segment.Selector,
-            Registers[whv.WHvX64RegisterDs].Segment.Selector,
-            Registers[whv.WHvX64RegisterEs].Segment.Selector,
-            Registers[whv.WHvX64RegisterFs].Segment.Selector,
-            Registers[whv.WHvX64RegisterGs].Segment.Selector,
+            R[17].Segment.Selector,
+            R[18].Segment.Selector,
+            R[19].Segment.Selector,
+            R[20].Segment.Selector,
+            R[21].Segment.Selector,
+            R[22].Segment.Selector,
             Rflags
         )
+
+    def MapGpaRange(self, Buffer, GuestAddress, Flags):
+        '''Map physical memory into the partition backed by process virtual-memory.'''
+        SizeInBytes = Align2Page(len(Buffer))
+        # XXX: Figure out ressource clean-up.
+        SourceBuffer = VirtualAlloc(
+            0,
+            SizeInBytes,
+            MEM_RESERVE | MEM_COMMIT,
+            PAGE_READWRITE
+        )
+
+        assert SourceBuffer is not None, 'VirtualAlloc failed.'
+        ct.memmove(SourceBuffer, Buffer, len(Buffer))
+
+        Success, Ret = WHvMapGpaRange(
+            self.Partition,
+            SourceBuffer,
+            GuestAddress,
+            SizeInBytes,
+            Flags
+        )
+
+        assert Success, 'WHvMapGpaRange failed with %x.' % Ret
+        return (SourceBuffer, SizeInBytes)
+
+def Generate32bCodeSegment():
+    '''Generate a 32-bit code ring0'''
+    CsSegment = whv.WHV_REGISTER_VALUE()
+    CsSegment.Segment.Base = 0x0
+    CsSegment.Segment.Limit = 0xffffffff
+    CsSegment.Segment.Selector = 0x1337
+    # A=Accessed, R=Readabale, C=Conforming, Reserved.
+    CsSegment.Segment.SegmentType = 0b1011
+    # bit12
+    CsSegment.Segment.NonSystemSegment = 1
+    CsSegment.Segment.DescriptorPrivilegeLevel = 0
+    # P=Present.
+    CsSegment.Segment.Present = 1
+    # AVL=Available.
+    CsSegment.Segment.Available = 0
+    # L=Long-mode segment
+    CsSegment.Segment.Long = 0
+    # D=Default operand size.
+    CsSegment.Segment.Default = 1
+    # G=Granularity.
+    CsSegment.Segment.Granularity = 1
+    return CsSegment
+
+class WHvPartitionConfig32b(object):
+    def __init__(self, Partition):
+        '''Configure a 32b execution environment'''
+
 
 class WHvExitReason(Enum):
     WHvRunVpExitReasonNone = 0x00000000
@@ -476,16 +647,63 @@ class WHvExitReason(Enum):
     WHvRunVpExitReasonException = 0x00001002
     WHvRunVpExitReasonCanceled = 0x00002001
 
-def IsHypervisorPresent():
-    '''Is the support for the Hypervisor Platform APIs
-    enabled?'''
-    Capabilities = whv.WHV_CAPABILITY()
-    Success, _, _ = WHvGetCapability(
-        whv.WHvCapabilityCodeHypervisorPresent,
-        Capabilities
-    )
+def DumpSegment(Segment):
+    '''Dump a segment on stdout.'''
+    S = Segment
+    print '                    Base:', hex(S.Base)
+    print '                   Limit:', hex(S.Limit)
+    print '                Selector:', hex(S.Selector)
+    print '             SegmentType:', hex(S.SegmentType)
+    print '        NonSystemSegment:', hex(S.NonSystemSegment)
+    print 'DescriptorPrivilegeLevel:', hex(S.DescriptorPrivilegeLevel)
+    print '                 Present:', hex(S.Present)
+    print '                     AVL:', hex(S.Available)
+    print '                    Long:', hex(S.Long)
+    print '                 Default:', hex(S.Default)
+    print '             Granularity:', hex(S.Granularity)
 
-    return Success and Capabilities.HypervisorPresent == 1
+def DumpExitContext(ExitContext):
+    '''Dump a WHV_RUN_VP_EXIT_CONTEXT on stdout.'''
+    E = ExitContext
+    print 'ExitReason:', WHvExitReason(E.ExitReason)
+    V = E.VpContext
+    print 'VpContext.InstructionLength:', hex(V.InstructionLength)
+    print 'VpContext.Cr8:', hex(V.Cr8)
+    print 'VpContext.Cs:', hex(V.Cs.Selector)
+    print 'VpContext.Rip:', hex(V.Rip)
+    print 'VpContext.Rflags:', hex(V.Rflags)
+    if E.ExitReason == whv.WHvRunVpExitReasonMemoryAccess:
+        M = E.MemoryAccess
+        print 'MemoryAccess.InstructionByteCount:', hex(M.InstructionByteCount)
+        A = M.AccessInfo
+        print 'MemoryAccess.AccessInfo.AccessType:', hex(A.AccessType)
+        print 'MemoryAccess.AccessInfo.GpaUnmapped:', hex(A.GpaUnmapped)
+        print 'MemoryAccess.AccessInfo.GvaValid:', hex(A.GvaValid)
+        print 'MemoryAccess.Gpa:', hex(M.Gpa)
+        print 'MemoryAccess.Gva:', hex(M.Gva)
+
+def CR0(Cr0):
+    '''Return a string representation of Cr0.'''
+    C = Cr0.Reg64
+    Bits = {
+        0 : 'PE',
+        1 : 'MP',
+        2 : 'EM',
+        3 : 'TS',
+        4 : 'ET',
+        5 : 'NE',
+        16 : 'WP',
+        18 : 'AM',
+        29 : 'NW',
+        30 : 'CD',
+        31 : 'PG'
+    }
+    S = []
+    for Bit, Str in Bits.iteritems():
+        if (C >> Bit) & 1:
+            S.append('CR0.%s' % Str)
+    S.append('(%08x)' % C)
+    return ' '.join(S)
 
 def main(argc, argv):
     HypervisorPresent = IsHypervisorPresent()
@@ -506,27 +724,80 @@ def main(argc, argv):
         if not Success:
             return 1
 
-    with WHvPartition(ProcessorCount = 1) as Partition:
+    PartitionOptions = {
+        'ProcessorCount' : 1,
+        'ExceptionExitBitmap' : whv.WHvX64ExceptionTypeBreakpointTrap,
+        'Name' : '32b kernel'
+    }
+
+    IDT_GPA = 0xffff0000
+    CODE_GPA = 0x0
+    with WHvPartition(**PartitionOptions) as Partition:
         print 'Partition created:', Partition
 
         InitialRip = Partition.GetRip(0)
         assert InitialRip == 0xfff0, 'The initial @rip(%x) does not match with expected value.' % InitialRip
         print 'Initial @rip in VP0:', hex(InitialRip)
 
-        Partition.SetRip(0, 0xdeadbeefbaadc0de)
+        GuestCodePageAddress, _ = Partition.MapGpaRange(
+            # inc eax ; ... ; int3
+            '\x40' * 0x1337 + '\xcc',
+            CODE_GPA,
+            'rx'
+        )
+
+        print 'Mapped GPA:%x backed by memory at %016x' % (
+            CODE_GPA,
+            GuestCodePageAddress
+        )
+
+        Cr0, Gdtr, Idtr = Partition.GetRegisters(0, (
+                whv.WHvX64RegisterCr0,
+                whv.WHvX64RegisterGdtr,
+                whv.WHvX64RegisterIdtr
+            )
+        )
+
+        print 'CR0:', CR0(Cr0)
+        print 'GDTR.Base:', hex(Gdtr.Table.Base)
+        print 'GDTR.Limit:', hex(Gdtr.Table.Limit)
+        print 'IDTR.Base:', hex(Idtr.Table.Base)
+        print 'IDTR.Limit:', hex(Idtr.Table.Limit)
+        Idtr.Table.Base = IDT_GPA
+
+        Partition.SetRegisters(
+            0, {
+                whv.WHvX64RegisterRip : CODE_GPA,
+                whv.WHvX64RegisterCs : Generate32bCodeSegment(),
+                whv.WHvX64RegisterIdtr : Idtr,
+                #whv.WHvX64RegisterCr0 : Cr0.Reg64 | 1
+            }
+        )
+        print 'Partition configured to run 32b kernel code'
+
         Rip = Partition.GetRip(0)
         print '@rip in VP0:', hex(Rip)
-        assert Rip == 0xdeadbeefbaadc0de, '@rip(%x) does not match what we assigned to it.' % Rip
+        assert Rip == CODE_GPA, '@rip(%x) does not match what we assigned to it.' % Rip
 
         ExitContext = Partition.RunVp(0)
         ExitReason = WHvExitReason(ExitContext.ExitReason)
         print 'Partition exited with:', ExitReason
-        if not (ExitReason.value == whv.WHvRunVpExitReasonInvalidVpRegisterValue):
-            raise RuntimeError('The VP did not exit with the appropriate ExitReason(%r)' % ExitReason)
+        DumpExitContext(ExitContext)
 
-        Rip = Partition.GetRip(0)
-        assert Rip == 0xdeadbeefbaadc0de, 'The @rip(%x) register in VP0 sounds bogus.' % Rip
         Partition.DumpRegisters(0)
+        Rip, Rax = Partition.GetRegisters64(
+            0, (
+                whv.WHvX64RegisterRip,
+                whv.WHvX64RegisterRax
+            )
+        )
+
+        assert Rip == (CODE_GPA + 0x1337), '@rax(%x) does not match the magic value.' % Rax
+        assert ExitReason.value == whv.WHvRunVpExitReasonMemoryAccess, 'A memory fault is expected when the int3 is triggered as the IDTR.Base is unmapped.'
+        FaultGpa = ExitContext.MemoryAccess.Gpa
+        InterruptionPending = ExitContext.VpContext.ExecutionState.InterruptionPending
+        InIdtBound = FaultGpa > IDT_GPA and FaultGpa < (IDT_GPA + Idtr.Table.Limit)
+        assert InterruptionPending and InIdtBound, 'The GPA faulting must be in the bound of the IDT.'
 
     print 'All good!'
     return 0
