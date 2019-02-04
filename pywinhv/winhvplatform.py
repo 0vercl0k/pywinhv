@@ -9,6 +9,164 @@ ct.windll.kernel32.VirtualAlloc.argtypes = (LPVOID, SIZE_T, DWORD, DWORD)
 ct.windll.kernel32.VirtualAlloc.restype = LPVOID
 VirtualAlloc = ct.windll.kernel32.VirtualAlloc
 
+# X64 General purpose registers
+_Rax = whv.WHvX64RegisterRax
+_Rcx = whv.WHvX64RegisterRcx
+_Rdx = whv.WHvX64RegisterRdx
+_Rbx = whv.WHvX64RegisterRbx
+_Rsp = whv.WHvX64RegisterRsp
+_Rbp = whv.WHvX64RegisterRbp
+_Rsi = whv.WHvX64RegisterRsi
+_Rdi = whv.WHvX64RegisterRdi
+_R8 = whv.WHvX64RegisterR8
+_R9 = whv.WHvX64RegisterR9
+_R10 = whv.WHvX64RegisterR10
+_R11 = whv.WHvX64RegisterR11
+_R12 = whv.WHvX64RegisterR12
+_R13 = whv.WHvX64RegisterR13
+_R14 = whv.WHvX64RegisterR14
+_R15 = whv.WHvX64RegisterR15
+_Rip = whv.WHvX64RegisterRip
+_Rflags = whv.WHvX64RegisterRflags
+
+# X64 Segment registers
+_Es = whv.WHvX64RegisterEs
+_Cs = whv.WHvX64RegisterCs
+_Ss = whv.WHvX64RegisterSs
+_Ds = whv.WHvX64RegisterDs
+_Fs = whv.WHvX64RegisterFs
+_Gs = whv.WHvX64RegisterGs
+_Ldtr = whv.WHvX64RegisterLdtr
+_Tr = whv.WHvX64RegisterTr
+
+# X64 Table registers
+_Idtr = whv.WHvX64RegisterIdtr
+_Gdtr = whv.WHvX64RegisterGdtr
+
+# X64 Control Registers
+_Cr0 = whv.WHvX64RegisterCr0
+_Cr2 = whv.WHvX64RegisterCr2
+_Cr3 = whv.WHvX64RegisterCr3
+_Cr4 = whv.WHvX64RegisterCr4
+_Cr8 = whv.WHvX64RegisterCr8
+
+# X64 Debug Registers
+_Dr0 = whv.WHvX64RegisterDr0
+_Dr1 = whv.WHvX64RegisterDr1
+_Dr2 = whv.WHvX64RegisterDr2
+_Dr3 = whv.WHvX64RegisterDr3
+_Dr6 = whv.WHvX64RegisterDr6
+_Dr7 = whv.WHvX64RegisterDr7
+
+# X64 Extended Control Registers
+_XCr0 = whv.WHvX64RegisterXCr0
+
+# X64 Floating Point and Vector Registers
+_Xmm0 = whv.WHvX64RegisterXmm0
+_Xmm1 = whv.WHvX64RegisterXmm1
+_Xmm2 = whv.WHvX64RegisterXmm2
+_Xmm3 = whv.WHvX64RegisterXmm3
+_Xmm4 = whv.WHvX64RegisterXmm4
+_Xmm5 = whv.WHvX64RegisterXmm5
+_Xmm6 = whv.WHvX64RegisterXmm6
+_Xmm7 = whv.WHvX64RegisterXmm7
+_Xmm8 = whv.WHvX64RegisterXmm8
+_Xmm9 = whv.WHvX64RegisterXmm9
+_Xmm10 = whv.WHvX64RegisterXmm10
+_Xmm11 = whv.WHvX64RegisterXmm11
+_Xmm12 = whv.WHvX64RegisterXmm12
+_Xmm13 = whv.WHvX64RegisterXmm13
+_Xmm14 = whv.WHvX64RegisterXmm14
+_Xmm15 = whv.WHvX64RegisterXmm15
+_FpMmx0 = whv.WHvX64RegisterFpMmx0
+_FpMmx1 = whv.WHvX64RegisterFpMmx1
+_FpMmx2 = whv.WHvX64RegisterFpMmx2
+_FpMmx3 = whv.WHvX64RegisterFpMmx3
+_FpMmx4 = whv.WHvX64RegisterFpMmx4
+_FpMmx5 = whv.WHvX64RegisterFpMmx5
+_FpMmx6 = whv.WHvX64RegisterFpMmx6
+_FpMmx7 = whv.WHvX64RegisterFpMmx7
+_FpControlStatus = whv.WHvX64RegisterFpControlStatus
+_XmmControlStatus = whv.WHvX64RegisterXmmControlStatus
+
+# X64 MSRs
+_Tsc = whv.WHvX64RegisterTsc
+_Efer = whv.WHvX64RegisterEfer
+_KernelGsBase = whv.WHvX64RegisterKernelGsBase
+_ApicBase = whv.WHvX64RegisterApicBase
+_Pat = whv.WHvX64RegisterPat
+_SysenterCs = whv.WHvX64RegisterSysenterCs
+_SysenterEip = whv.WHvX64RegisterSysenterEip
+_SysenterEsp = whv.WHvX64RegisterSysenterEsp
+_Star = whv.WHvX64RegisterStar
+_Lstar = whv.WHvX64RegisterLstar
+_Cstar = whv.WHvX64RegisterCstar
+_Sfmask = whv.WHvX64RegisterSfmask
+
+_MsrMtrrCap = whv.WHvX64RegisterMsrMtrrCap
+_MsrMtrrDefType = whv.WHvX64RegisterMsrMtrrDefType
+
+_MsrMtrrPhysBase0 = whv.WHvX64RegisterMsrMtrrPhysBase0
+_MsrMtrrPhysBase1 = whv.WHvX64RegisterMsrMtrrPhysBase1
+_MsrMtrrPhysBase2 = whv.WHvX64RegisterMsrMtrrPhysBase2
+_MsrMtrrPhysBase3 = whv.WHvX64RegisterMsrMtrrPhysBase3
+_MsrMtrrPhysBase4 = whv.WHvX64RegisterMsrMtrrPhysBase4
+_MsrMtrrPhysBase5 = whv.WHvX64RegisterMsrMtrrPhysBase5
+_MsrMtrrPhysBase6 = whv.WHvX64RegisterMsrMtrrPhysBase6
+_MsrMtrrPhysBase7 = whv.WHvX64RegisterMsrMtrrPhysBase7
+_MsrMtrrPhysBase8 = whv.WHvX64RegisterMsrMtrrPhysBase8
+_MsrMtrrPhysBase9 = whv.WHvX64RegisterMsrMtrrPhysBase9
+_MsrMtrrPhysBaseA = whv.WHvX64RegisterMsrMtrrPhysBaseA
+_MsrMtrrPhysBaseB = whv.WHvX64RegisterMsrMtrrPhysBaseB
+_MsrMtrrPhysBaseC = whv.WHvX64RegisterMsrMtrrPhysBaseC
+_MsrMtrrPhysBaseD = whv.WHvX64RegisterMsrMtrrPhysBaseD
+_MsrMtrrPhysBaseE = whv.WHvX64RegisterMsrMtrrPhysBaseE
+_MsrMtrrPhysBaseF = whv.WHvX64RegisterMsrMtrrPhysBaseF
+
+_MsrMtrrPhysMask0 = whv.WHvX64RegisterMsrMtrrPhysMask0
+_MsrMtrrPhysMask1 = whv.WHvX64RegisterMsrMtrrPhysMask1
+_MsrMtrrPhysMask2 = whv.WHvX64RegisterMsrMtrrPhysMask2
+_MsrMtrrPhysMask3 = whv.WHvX64RegisterMsrMtrrPhysMask3
+_MsrMtrrPhysMask4 = whv.WHvX64RegisterMsrMtrrPhysMask4
+_MsrMtrrPhysMask5 = whv.WHvX64RegisterMsrMtrrPhysMask5
+_MsrMtrrPhysMask6 = whv.WHvX64RegisterMsrMtrrPhysMask6
+_MsrMtrrPhysMask7 = whv.WHvX64RegisterMsrMtrrPhysMask7
+_MsrMtrrPhysMask8 = whv.WHvX64RegisterMsrMtrrPhysMask8
+_MsrMtrrPhysMask9 = whv.WHvX64RegisterMsrMtrrPhysMask9
+_MsrMtrrPhysMaskA = whv.WHvX64RegisterMsrMtrrPhysMaskA
+_MsrMtrrPhysMaskB = whv.WHvX64RegisterMsrMtrrPhysMaskB
+_MsrMtrrPhysMaskC = whv.WHvX64RegisterMsrMtrrPhysMaskC
+_MsrMtrrPhysMaskD = whv.WHvX64RegisterMsrMtrrPhysMaskD
+_MsrMtrrPhysMaskE = whv.WHvX64RegisterMsrMtrrPhysMaskE
+_MsrMtrrPhysMaskF = whv.WHvX64RegisterMsrMtrrPhysMaskF
+
+_MsrMtrrFix64k00000 = whv.WHvX64RegisterMsrMtrrFix64k00000
+_MsrMtrrFix16k80000 = whv.WHvX64RegisterMsrMtrrFix16k80000
+_MsrMtrrFix16kA0000 = whv.WHvX64RegisterMsrMtrrFix16kA0000
+_MsrMtrrFix4kC0000 = whv.WHvX64RegisterMsrMtrrFix4kC0000
+_MsrMtrrFix4kC8000 = whv.WHvX64RegisterMsrMtrrFix4kC8000
+_MsrMtrrFix4kD0000 = whv.WHvX64RegisterMsrMtrrFix4kD0000
+_MsrMtrrFix4kD8000 = whv.WHvX64RegisterMsrMtrrFix4kD8000
+_MsrMtrrFix4kE0000 = whv.WHvX64RegisterMsrMtrrFix4kE0000
+_MsrMtrrFix4kE8000 = whv.WHvX64RegisterMsrMtrrFix4kE8000
+_MsrMtrrFix4kF0000 = whv.WHvX64RegisterMsrMtrrFix4kF0000
+_MsrMtrrFix4kF8000 = whv.WHvX64RegisterMsrMtrrFix4kF8000
+
+_TscAux = whv.WHvX64RegisterTscAux
+_SpecCtrl = whv.WHvX64RegisterSpecCtrl
+_PredCmd = whv.WHvX64RegisterPredCmd
+
+# APIC state (also accessible via WHv(Get/Set)VirtualProcessorInterruptControllerState)
+_ApicId = whv.WHvX64RegisterApicId
+_ApicVersion = whv.WHvX64RegisterApicVersion
+
+# Interrupt / Event Registers
+_RegisterPendingInterruption = whv.WHvRegisterPendingInterruption
+_RegisterInterruptState = whv.WHvRegisterInterruptState
+_RegisterPendingEvent = whv.WHvRegisterPendingEvent
+_DeliverabilityNotifications = whv.WHvX64RegisterDeliverabilityNotifications
+_RegisterInternalActivityState = whv.WHvRegisterInternalActivityState
+
 MEM_COMMIT = 0x00001000
 MEM_RESERVE = 0x00002000
 PAGE_READWRITE = 0x04
@@ -359,6 +517,47 @@ def WHvUnmapGpaRange(Partition, GuestAddress, SizeInBytes):
     Success = Ret == 0
     return (Success, Ret & 0xffffffff)
 
+def WHvTranslateGva(Partition, VpIndex, Gva, TranslateFlags):
+    '''
+    HRESULT
+    WINAPI
+    WHvTranslateGva(
+        _In_ WHV_PARTITION_HANDLE Partition,
+        _In_ UINT32 VpIndex,
+        _In_ WHV_GUEST_VIRTUAL_ADDRESS Gva,
+        _In_ WHV_TRANSLATE_GVA_FLAGS TranslateFlags,
+        _Out_ WHV_TRANSLATE_GVA_RESULT* TranslationResult,
+        _Out_ WHV_GUEST_PHYSICAL_ADDRESS* Gpa
+        );
+
+    Translating a virtual address used by a virtual processor in a partition allows
+    the virtualization stack to emulate a processor instruction for an I/O operation,
+    using the results of the translation to read and write the memory operands of the
+    instruction in the GPA space of the partition.
+
+    The hypervisor performs the translating by walking the page table that is
+    currently active for the virtual processor. The translation can fail if the page
+    table is not accessible, in which case an appropriate page fault needs to be
+    injected into the virtual processor by the virtualization stack.
+    '''
+
+    TranslationResult = whv.WHV_TRANSLATE_GVA_RESULT()
+    Gpa = whv.new_PUINT64()
+    Ret = whv.WHvTranslateGva(
+        Partition,
+        VpIndex,
+        Gva,
+        TranslateFlags,
+        TranslationResult,
+        Gpa
+    )
+
+    GpaValue = whv.PUINT64_value(Gpa)
+    Success = Ret == 0
+    # Release the UINT64 pointer.
+    whv.delete_PUINT64(Gpa)
+    return (Success, TranslationResult.ResultCode, GpaValue, Ret & 0xffffffff)
+
 def IsHypervisorPresent():
     '''Is the support for the Hypervisor Platform APIs
     enabled?'''
@@ -375,6 +574,7 @@ class WHvPartition(object):
     def __init__(self, **kwargs):
         '''Create and setup a Partition object.'''
         assert IsHypervisorPresent(), 'The hypervisor platform APIs support must be turned on.'
+        self.CurrentGpa = 0
         self.ProcessorCount = kwargs.get('ProcessorCount', 1)
         self.Name = kwargs.get('Name', 'DefaultName')
         self.ExceptionExitBitmap = kwargs.get('ExceptionExitBitmap', 0)
@@ -393,24 +593,6 @@ class WHvPartition(object):
             Property
         )
         assert Success, 'WHvSetPartitionProperty(ProcessorCount) failed in context manager with %x.' % Ret
-
-        # Enable Exception vmexits.
-        #Property.ExtendedVmExits.ExceptionExit = 1
-        #Success, Ret = WHvSetPartitionProperty(
-        #    self.Partition,
-        #    whv.WHvPartitionPropertyCodeExtendedVmExits,
-        #    Property
-        #)
-        #assert Success, 'WHvSetPartitionProperty(ExtendedVmExits) failed in context manager with %x.' % Ret
-
-        ## Configure the ExceptionExitBitmap
-        #Property.ExceptionExitBitmap = self.ExceptionExitBitmap
-        #Success, Ret = WHvSetPartitionProperty(
-        #    self.Partition,
-        #    whv.WHvPartitionPropertyCodeExceptionExitBitmap,
-        #    Property
-        #)
-        #assert Success, 'WHvSetPartitionProperty(ExitBitmap) failed in context manager with %x.' % Ret
 
         # Activate the partition.
         Success, Ret = WHvSetupPartition(self.Partition)
@@ -457,8 +639,7 @@ class WHvPartition(object):
             self.Partition, VpIndex
         )
 
-        if not Success:
-            raise RuntimeError('WHvRunVirtualProcessor failed with %x.' % Ret)
+        assert Success, ('WHvRunVirtualProcessor failed with %x.' % Ret)
 
         return ExitContext
 
@@ -476,7 +657,7 @@ class WHvPartition(object):
         '''Set the @rip register of a VP'''
         return self.SetRegisters(
             VpIndex, {
-                whv.WHvX64RegisterRip: Rip
+                _Rip: Rip
             }
         )
 
@@ -505,22 +686,18 @@ class WHvPartition(object):
         '''Get the @rip register of a VP.'''
         return self.GetRegisters64(
             VpIndex,
-            [whv.WHvX64RegisterRip]
+            [_Rip]
         )[0]
 
     def DumpRegisters(self, VpIndex):
         '''Dump the register of a VP.'''
         R = self.GetRegisters(
             VpIndex, [
-                whv.WHvX64RegisterRax, whv.WHvX64RegisterRbx, whv.WHvX64RegisterRcx,
-                whv.WHvX64RegisterRdx, whv.WHvX64RegisterRsi, whv.WHvX64RegisterRdi,
-                whv.WHvX64RegisterRip, whv.WHvX64RegisterRsp, whv.WHvX64RegisterRbp,
-                whv.WHvX64RegisterR8, whv.WHvX64RegisterR9, whv.WHvX64RegisterR10,
-                whv.WHvX64RegisterR11, whv.WHvX64RegisterR12, whv.WHvX64RegisterR13,
-                whv.WHvX64RegisterR14, whv.WHvX64RegisterR15,
-                whv.WHvX64RegisterCs, whv.WHvX64RegisterSs, whv.WHvX64RegisterDs,
-                whv.WHvX64RegisterEs, whv.WHvX64RegisterFs, whv.WHvX64RegisterGs,
-                whv.WHvX64RegisterRflags
+                _Rax, _Rbx, _Rcx, _Rdx, _Rsi, _Rdi,
+                _Rip, _Rsp, _Rbp, _R8, _R9, _R10,
+                _R11, _R12, _R13, _R14, _R15,
+                _Cs, _Ss, _Ds, _Es, _Fs, _Gs,
+                _Rflags, _Cr3
             ]
         )
 
@@ -569,40 +746,83 @@ class WHvPartition(object):
             'id' if ((Rflags >> 0x15) & 1) else '   ',
         )
 
-        print 'cs=%04x ss=%04x ds=%04x es=%04x fs=%04x gs=%04x   efl=%08x' % (
+        print 'cs=%04x ss=%04x ds=%04x es=%04x fs=%04x gs=%04x efl=%08x cr3=%08x' % (
             R[17].Segment.Selector,
             R[18].Segment.Selector,
             R[19].Segment.Selector,
             R[20].Segment.Selector,
             R[21].Segment.Selector,
             R[22].Segment.Selector,
-            Rflags
+            Rflags,
+            R[24].Reg64
         )
 
-    def MapGpaRange(self, Buffer, GuestAddress, Flags):
-        '''Map physical memory into the partition backed by process virtual-memory.'''
-        SizeInBytes = Align2Page(len(Buffer))
-        # XXX: Figure out ressource clean-up.
-        SourceBuffer = VirtualAlloc(
+    def MapGpaRangeWithoutContent(self, SizeInBytes, Gpa, Flags):
+        SizeInBytes = Align2Page(SizeInBytes)
+        Hva = VirtualAlloc(
             0,
             SizeInBytes,
             MEM_RESERVE | MEM_COMMIT,
             PAGE_READWRITE
         )
 
-        assert SourceBuffer is not None, 'VirtualAlloc failed.'
-        ct.memmove(SourceBuffer, Buffer, len(Buffer))
+        assert Hva is not None, 'VirtualAlloc failed.'
 
         Success, Ret = WHvMapGpaRange(
             self.Partition,
-            SourceBuffer,
-            GuestAddress,
+            Hva,
+            Gpa,
             SizeInBytes,
             Flags
         )
 
         assert Success, 'WHvMapGpaRange failed with %x.' % Ret
+        return (Hva, Gpa, SizeInBytes)
+
+    def MapGpaRange(self, Buffer, Gpa, Flags):
+        '''Map physical memory into the partition backed by process virtual-memory.'''
+        Hva, _, SizeInBytes = self.MapGpaRangeWithoutContent(
+            len(Buffer),
+            Gpa,
+            Flags
+        )
+
+        ct.memmove(Hva, Buffer, len(Buffer))
         return (SourceBuffer, SizeInBytes)
+
+    def MapCode(self, Code, Gpa, Writeable = False):
+        '''Map code into the partition.'''
+        Flags = 'rx'
+
+        if Writeable:
+            Flags += 'w'
+
+        HostAddress, CodeLength = self.MapGpaRange(
+            Code,
+            Gpa,
+            'rx'
+        )
+
+        return (HostAddress, CodeLength)
+
+    def GetGpa(self):
+        Gpa = self.CurrentGpa
+        self.CurrentGpa += 0x1000
+        return Gpa
+
+    def TranslateGva(self, VpIndex, Gva, Flags = None):
+        if Flags is None:
+            Flags = whv.WHvTranslateGvaFlagValidateRead | whv.WHvTranslateGvaFlagPrivilegeExempt
+
+        Success, ResultCode, Gpa, Ret = WHvTranslateGva(
+            self.Partition,
+            VpIndex,
+            Gva,
+            Flags
+        )
+
+        assert Success, 'WHvTranslateGva failed with: %x.' % Ret
+        return (WHvTranslateGvaResultCode(ResultCode), Gpa)
 
 def Generate32bCodeSegment():
     '''Generate a 32-bit code ring0'''
@@ -627,10 +847,9 @@ def Generate32bCodeSegment():
     CsSegment.Segment.Granularity = 1
     return CsSegment
 
-class WHvPartitionConfig32b(object):
-    def __init__(self, Partition):
-        '''Configure a 32b execution environment'''
-
+def Config32bEnvironment(Partition):
+    '''XXX: remove this'''
+    pass
 
 class WHvExitReason(Enum):
     WHvRunVpExitReasonNone = 0x00000000
@@ -646,6 +865,17 @@ class WHvExitReason(Enum):
     WHvRunVpExitReasonX64Cpuid = 0x00001001
     WHvRunVpExitReasonException = 0x00001002
     WHvRunVpExitReasonCanceled = 0x00002001
+
+class WHvTranslateGvaResultCode(Enum):
+    WHvTranslateGvaResultSuccess                 = 0
+    WHvTranslateGvaResultPageNotPresent          = 1
+    WHvTranslateGvaResultPrivilegeViolation      = 2
+    WHvTranslateGvaResultInvalidPageTableFlags   = 3
+    WHvTranslateGvaResultGpaUnmapped             = 4
+    WHvTranslateGvaResultGpaNoReadAccess         = 5
+    WHvTranslateGvaResultGpaNoWriteAccess        = 6
+    WHvTranslateGvaResultGpaIllegalOverlayAccess = 7
+    WHvTranslateGvaResultIntercept               = 8
 
 def DumpSegment(Segment):
     '''Dump a segment on stdout.'''
@@ -705,6 +935,121 @@ def CR0(Cr0):
     S.append('(%08x)' % C)
     return ' '.join(S)
 
+def BuildVirtualAddressSpace(Partition, PageGvas):
+    '''This function builds the proper paging structures necessary
+    to back a set of GVAs pages.
+
+    Little 'how to 4-level paging':
+
+        * PML4->PDPT->PD->PT,
+        * Each entry are 8 bytes long,
+        * The virtual-address is broken down like this:
+            [Unused - 16 bits][PML4 Index - 9 bits][PDPT Index - 9 bits][PD Index - 9 bits][PT Index - 9 bits][Page Offset 12 bits]
+    '''
+
+    PageTables = []
+
+    # Walk the GVA and keep track of the various paging structures
+    # we need.
+    for PageGva in PageGvas:
+        PtIndex   = (PageGva >> (12 + (9 * 0))) & 0b111111111
+        PdIndex   = (PageGva >> (12 + (9 * 1))) & 0b111111111
+        PdptIndex = (PageGva >> (12 + (9 * 2))) & 0b111111111
+        Pml4Index = (PageGva >> (12 + (9 * 3))) & 0b111111111
+        PageTables.append((
+            PageGva,
+            PtIndex,
+            PdIndex,
+            PdptIndex,
+            Pml4Index
+        ))
+
+    from pprint import pprint
+    pprint(PageTables)
+
+    # Those keep track of the various paging structure we have already allocated.
+    GvaEntries = {}
+    PtEntries = {}
+    PdEntries = {}
+    PdptEntries = {}
+    Pml4Entries = {}
+
+    def AllocateTableIfNeeded(Ledger, Idx):
+        PageInfo = Ledger.get(Idx, None)
+        if PageInfo is not None:
+            return PageInfo
+
+        # Allocate backing memory host side.
+        Hva, Gpa, _ = Partition.MapGpaRangeWithoutContent(
+            0x1000,
+            Partition.GetGpa(),
+            'rw'
+        )
+
+        # Feed the information into the appropriate ledger. We keep track
+        # of the host address and the GPA.
+        Ledger[Idx] = (Hva, Gpa)
+        return (Hva, Gpa)
+
+    # We know we need a PML4 table, so allocate it now.
+    Pml4Hva, Pml4Gpa, _ = Partition.MapGpaRangeWithoutContent(
+        0x1000,
+        Partition.GetGpa(),
+        'rw'
+    )
+
+    GetPfn = lambda A: A / 0x1000
+    print 'Pml4Hva', hex(Pml4Hva), 'Pml4Gpa', hex(Pml4Gpa), 'Pfn', GetPfn(Pml4Gpa), 'Pml4e', 255
+
+    for Gva, PtIdx, PdIdx, PdptIdx, Pml4Idx in PageTables:
+        # Allocate a page for each level if needed.
+        GvaHva, GvaGpa = AllocateTableIfNeeded(PtEntries, PtIdx)
+        PtHva, PtGpa = AllocateTableIfNeeded(PdEntries, PdIdx)
+        PdHva, PdGpa = AllocateTableIfNeeded(PdptEntries, PdptIdx)
+        PdptHva, PdptGpa = AllocateTableIfNeeded(Pml4Entries, Pml4Idx)
+        Pml4Entries.setdefault(Pml4Idx, (Pml4Hva, Pml4Gpa))
+
+        print 'PdptHva', hex(PdptHva), 'PdptGpa', hex(PdptGpa), 'Pfn', GetPfn(PdptGpa), 'Pdpte', PdptIdx
+        print '  PdHva', hex(PdHva), '  PdGpa', hex(PdGpa), 'Pfn', GetPfn(PdGpa),'  Pde', PdIdx
+        print '  PtHva', hex(PtHva), '  PtGpa', hex(PtGpa), 'Pfn', GetPfn(PtGpa), '  Pte', PtIdx
+        print '  PageHva', hex(GvaHva), 'PageGpa', hex(GvaGpa)
+
+        # Now that we have the memory backing the various levels
+        # we want to properly link them together.
+        TableEntry = whv.MMPTE_HARDWARE()
+        TableEntry.AsUINT64 = 0
+        TableEntry.Present = 1
+        TableEntry.Write = 1
+        TableEntry.UserAccessible = 1
+
+        # First, the PML4E to the PDPT.
+        TableEntry.PageFrameNumber = GetPfn(PdptGpa)
+        Pml4 = (SIZE_T * 512).from_address(Pml4Hva)
+        Pml4[Pml4Idx] = TableEntry.AsUINT64
+
+        # Next, the PDPTE to the PD.
+        TableEntry.AsUINT64 = 0
+        TableEntry.PageFrameNumber = GetPfn(PdGpa)
+        Pdpt = (SIZE_T * 512).from_address(PdptHva)
+        Pdpt[PdptIdx] = TableEntry.AsUINT64
+
+        # Next, the PDE to the PT.
+        TableEntry.AsUINT64 = 0
+        TableEntry.PageFrameNumber = GetPfn(PtGpa)
+        Pd = (SIZE_T * 512).from_address(PdHva)
+        Pd[PdIdx] = TableEntry.AsUINT64
+
+        # Finally, the PTE to the Page.
+        TableEntry.AsUINT64 = 0
+        TableEntry.PageFrameNumber = GetPfn(GvaGpa)
+        Pt = (SIZE_T * 512).from_address(PtHva)
+        Pt[PtIdx] = TableEntry.AsUINT64
+
+    print Pml4Entries, PdptEntries
+    PageCount = len(GvaEntries) + len(PtEntries) + len(PdEntries) + len(PdptEntries) + len(Pml4Entries) + 1
+    print 'This VA requires', PageCount, 'pages total which is', (PageCount * 0x1000) / 1024 / 1024, 'MB'
+    return Pml4Gpa
+
 def main(argc, argv):
     HypervisorPresent = IsHypervisorPresent()
     print 'HypervisorPresent:', HypervisorPresent
@@ -724,14 +1069,187 @@ def main(argc, argv):
         if not Success:
             return 1
 
+    print '64-bit kernel'.center(80, '=')
+
+    PartitionOptions = {
+       'ProcessorCount' : 1,
+       'Name' : '64b user'
+    }
+
+
+    with WHvPartition(**PartitionOptions) as Partition:
+        print 'Partition created:', Partition
+
+        # Configure the base of the IDT where we don't have any memory mapped.
+        # This allow us to trigger a memory access violation when it is read.
+        IdtGpa = Partition.GetGpa()
+        Idtr = whv.WHV_REGISTER_VALUE()
+        Idtr.Table.Base = IdtGpa
+        Idtr.Table.Limit = 0
+
+        # Let's enable long mode now...
+        # https://wiki.osdev.org/Setting_Up_Long_Mode.
+        # We basically need several things (cf https://wiki.osdev.org/X86-64):
+        #   * Set the PAE enable bit in CR4
+        #   * Load CR3 with the physical address of the PML4
+        #   * Enable long mode by setting the EFER.LME flag in MSR 0xC0000080
+        #   * Enable paging
+
+        # Little remainder how this shit works: PML4->PDPT->PD->PT (aka 4 level paging).
+        # Each entry are 8 bytes long, and each table have 512 entries.
+        # This allow us to address at most: (4096 * PAGE_SIZE) * 4096 * 4096 * 4096
+        # PML4 physical address.
+        #
+        # OK so we need to allocate memory for paging structures, and build the
+        # virtual address space.
+        Pages = [
+            0x0007fffb8c05000,
+            #0x0007fffb8c06000,
+            #0x0007fffb8c07000,
+            #0x0007ff746a40000
+        ]
+
+        PagingBase = Partition.GetGpa()
+        Pml4Gpa = BuildVirtualAddressSpace(
+            Partition,
+            Pages
+        )
+
+        # Turn on CR4.PAE.
+        # kd> r @cr4
+        # cr4=0000000000130620
+        # 0b100110000011000100000
+        # 'Physical Address Extension', 'Operating system support for FXSAVE and FXRSTOR instructions',
+        # 'Operating System Support for Unmasked SIMD Floating-Point Exceptions',
+        # 'Enables the instructions RDFSBASE, RDGSBASE, WRFSBASE, and WRGSBASE',
+        # 'PCID Enable', 'Supervisor Mode Execution Protection Enable'.
+        Cr4 = 0x130620
+
+        # We need to update CR3 to point to the PML4's physical address.
+        Cr3 = Pml4Gpa
+
+        # Turn on EFER.LME.
+        # kd> rdmsr 0xC0000080
+        # msr[c0000080] = 00000000`00000d01
+        # 0b0000110100000001
+        # 'System Call Extensions', 'Long Mode Enable', 'Long Mode Active', 'No-Execute Enable'.
+        Efer = 0xd01
+
+        # Turn on CR0.PG.
+        # 'Protected Mode Enable', 'Extension type', 'Numeric Error', 'Write Protect',
+        # 'Alignment mask', 'Paging'.
+        Cr0 = 0x80050031
+
+        Partition.SetRegisters(
+            0, {
+                _Idtr : Idtr,
+                _Cr0 : Cr0,
+                _Cr3 : Cr3,
+                _Cr4 : Cr4,
+                _Efer : Efer
+            }
+        )
+
+        print 'Enabled 64-bit long mode'
+
+        # We should be good to set-up 64-bit user-mode segments now.
+        # 0:000> r @cs
+        # cs=0033
+        Cs = whv.WHV_REGISTER_VALUE()
+        Cs.Segment.Base = 0x0
+        Cs.Segment.Limit = 0xffffffff
+        Cs.Segment.Selector = 0x33
+        # A=Accessed, R=Readabale, C=Conforming, Reserved.
+        Cs.Segment.SegmentType = 0b1011
+        # bit12
+        Cs.Segment.NonSystemSegment = 1
+        Cs.Segment.DescriptorPrivilegeLevel = 3
+        # P=Present.
+        Cs.Segment.Present = 1
+        # AVL=Available.
+        Cs.Segment.Available = 0
+        # L=Long-mode segment
+        Cs.Segment.Long = 1
+        # D=Default operand size.
+        Cs.Segment.Default = 0
+        # G=Granularity.
+        Cs.Segment.Granularity = 1
+
+        # 0:001> r @ss
+        # ss=002b
+        # 0:001> r @fs
+        # fs=0053
+        Ss = whv.WHV_REGISTER_VALUE()
+        Ss.Segment.Base = 0x0
+        Ss.Segment.Limit = 0xffffffff
+        Ss.Segment.Selector = 0x2b
+        # A=Accessed, R=Readabale, C=Conforming, Reserved.
+        Ss.Segment.SegmentType = 0b1011
+        # bit12
+        Ss.Segment.NonSystemSegment = 1
+        Ss.Segment.DescriptorPrivilegeLevel = 3
+        # P=Present.
+        Ss.Segment.Present = 1
+        # AVL=Available.
+        Ss.Segment.Available = 0
+        # L=Long-mode segment
+        Ss.Segment.Long = 1
+        # D=Default operand size.
+        Ss.Segment.Default = 0
+        # G=Granularity.
+        Ss.Segment.Granularity = 1
+
+        # XXX: Configure GS.
+        Partition.SetRegisters(
+            0, {
+                _Cs : Cs,
+               # _Ss : Ss,
+               # _Ds : Ss,
+               # _Es : Ss,
+               # _Fs : Ss,
+               # _Gs : Ss,
+                _Rdx : 0
+            }
+        )
+
+        # Let's start to map code/data from this address
+        USER_GPA = Partition.GetGpa()
+        Partition.DumpRegisters(0)
+
+        ResultCode, Gpa = Partition.TranslateGva(
+            0,
+            Pages[0]
+        )
+
+        print ResultCode, 'Gpa', Gpa
+        # assert ResultCode.value == whv.WHvTranslateGvaResultSuccess, 'TranslateGva(%x) returned %s.' % (Gpa, ResultCode)
+        #CodeGva = Pages[0]
+        #Partition.MapCode(
+        #    '\x48\xff\xc0' * 1337,
+        #    USER_GPA
+        #)
+
+        Partition.SetRip(
+            0,
+            Pages[0]
+        )
+        Partition.DumpRegisters(0)
+
+        ExitContext = Partition.RunVp(0)
+        ExitReason = WHvExitReason(ExitContext.ExitReason)
+        print 'Partition exited with:', ExitReason
+        DumpExitContext(ExitContext)
+
+    return
+    print '32-bit kernel'.center(80, '=')
+    IDT_GPA = 0xffff0000
+    CODE_GPA = 0x0
+
     PartitionOptions = {
         'ProcessorCount' : 1,
-        'ExceptionExitBitmap' : whv.WHvX64ExceptionTypeBreakpointTrap,
         'Name' : '32b kernel'
     }
 
-    IDT_GPA = 0xffff0000
-    CODE_GPA = 0x0
     with WHvPartition(**PartitionOptions) as Partition:
         print 'Partition created:', Partition
 
@@ -739,11 +1257,10 @@ def main(argc, argv):
         assert InitialRip == 0xfff0, 'The initial @rip(%x) does not match with expected value.' % InitialRip
         print 'Initial @rip in VP0:', hex(InitialRip)
 
-        GuestCodePageAddress, _ = Partition.MapGpaRange(
+        GuestCodePageAddress, _ = Partition.MapCode(
             # inc eax ; ... ; int3
             '\x40' * 0x1337 + '\xcc',
-            CODE_GPA,
-            'rx'
+            CODE_GPA
         )
 
         print 'Mapped GPA:%x backed by memory at %016x' % (
@@ -752,9 +1269,9 @@ def main(argc, argv):
         )
 
         Cr0, Gdtr, Idtr = Partition.GetRegisters(0, (
-                whv.WHvX64RegisterCr0,
-                whv.WHvX64RegisterGdtr,
-                whv.WHvX64RegisterIdtr
+                _Cr0,
+                _Gdtr,
+                _Idtr
             )
         )
 
@@ -767,10 +1284,10 @@ def main(argc, argv):
 
         Partition.SetRegisters(
             0, {
-                whv.WHvX64RegisterRip : CODE_GPA,
-                whv.WHvX64RegisterCs : Generate32bCodeSegment(),
-                whv.WHvX64RegisterIdtr : Idtr,
-                #whv.WHvX64RegisterCr0 : Cr0.Reg64 | 1
+                _Rip : CODE_GPA,
+                _Cs : Generate32bCodeSegment(),
+                _Idtr : Idtr,
+                #_Cr0 : Cr0.Reg64 | 1
             }
         )
         print 'Partition configured to run 32b kernel code'
@@ -787,8 +1304,8 @@ def main(argc, argv):
         Partition.DumpRegisters(0)
         Rip, Rax = Partition.GetRegisters64(
             0, (
-                whv.WHvX64RegisterRip,
-                whv.WHvX64RegisterRax
+                _Rip,
+                _Rax
             )
         )
 

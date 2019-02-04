@@ -3,6 +3,7 @@
 %{
     #include <WinHvPlatform.h>
     #include <WinHvEmulation.h>
+    #include <Extras.h>
 %}
 
 // Suppress SAL annotations.
@@ -27,6 +28,7 @@
 // XXX: Use typemaps.
 %include cpointer.i
 %pointer_functions(UINT32, PUINT32)
+%pointer_functions(UINT64, PUINT64)
 %pointer_functions(WHV_PARTITION_HANDLE, PWHV_PARTITION_HANDLE)
 
 // For dealing with __stdcall (CALLBACK, WINAPI).
@@ -39,6 +41,7 @@
 %include <WinHvPlatformDefs.h>
 %include <WinHvPlatform.h>
 %include <WinHvEmulation.h>
+%include <Extras.h>
 
 // Expose a way to get the sizeof various types from Python.
 %extend WHV_RUN_VP_EXIT_CONTEXT {
