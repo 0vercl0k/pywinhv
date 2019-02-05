@@ -578,6 +578,7 @@ class WHvPartition(object):
         self.ProcessorCount = kwargs.get('ProcessorCount', 1)
         self.Name = kwargs.get('Name', 'DefaultName')
         self.ExceptionExitBitmap = kwargs.get('ExceptionExitBitmap', 0)
+        self.TranslationTable = {}
 
         # Create the partition.
         Success, Partition, Ret = WHvCreatePartition()
@@ -682,11 +683,17 @@ class WHvPartition(object):
         '''Get registers of a VP and return the .Reg64 part.'''
         return self.GetRegisters(VpIndex, Registers, Reg64 = True)
 
+    def GetRegister(self, VpIndex, Register):
+        return self.GetRegisters(
+            VpIndex,
+            (Register, )
+        )[0]
+
     def GetRip(self, VpIndex):
         '''Get the @rip register of a VP.'''
         return self.GetRegisters64(
             VpIndex,
-            [_Rip]
+            (_Rip, )
         )[0]
 
     def DumpRegisters(self, VpIndex):
@@ -777,6 +784,7 @@ class WHvPartition(object):
         )
 
         assert Success, 'WHvMapGpaRange failed with %x.' % Ret
+        self.TranslationTable[Gpa] = Hva
         return (Hva, Gpa, SizeInBytes)
 
     def MapGpaRange(self, Buffer, Gpa, Flags):
@@ -913,7 +921,7 @@ def DumpExitContext(ExitContext):
         print 'MemoryAccess.Gva:', hex(M.Gva)
 
 def CR0(Cr0):
-    '''Return a string representation of Cr0.'''
+    '''Return a string representation of CR0.'''
     C = Cr0.Reg64
     Bits = {
         0 : 'PE',
@@ -934,6 +942,40 @@ def CR0(Cr0):
             S.append('CR0.%s' % Str)
     S.append('(%08x)' % C)
     return ' '.join(S)
+
+def CR4(Cr4):
+    '''Return a string representation of CR4.'''
+    C = Cr4.Reg64
+    Bits = {
+        0 : 'VME',
+        1 : 'PVI',
+        2 : 'TSD',
+        3 : 'DE',
+        4 : 'PSE',
+        5 : 'PAE',
+        6 : 'MCE',
+        7 : 'PGE',
+        8 : 'PCE',
+        9 : 'OSFXSR',
+        10 : 'OSXMMEXCPT',
+        11 : 'UMIP',
+        12 : 'LA57',
+        13 : 'VMXE',
+        14 : 'SMXE',
+        16 : 'FSGSBASE',
+        17 : 'PCIDE',
+        18 : 'OSXSAVE',
+        20 : 'SMEP',
+        21 : 'SMAP',
+        22 : 'PKE'
+    }
+    S = []
+    for Bit, Str in Bits.iteritems():
+        if (C >> Bit) & 1:
+            S.append('CR4.%s' % Str)
+    S.append('(%08x)' % C)
+    return ' '.join(S)
+
 
 def BuildVirtualAddressSpace(Partition, PageGvas):
     '''This function builds the proper paging structures necessary
@@ -974,7 +1016,7 @@ def BuildVirtualAddressSpace(Partition, PageGvas):
     PdptEntries = {}
     Pml4Entries = {}
 
-    def AllocateTableIfNeeded(Ledger, Idx):
+    def AllocateTableIfNeeded(Ledger, Idx, Flags = 'rw'):
         PageInfo = Ledger.get(Idx, None)
         if PageInfo is not None:
             return PageInfo
@@ -983,7 +1025,7 @@ def BuildVirtualAddressSpace(Partition, PageGvas):
         Hva, Gpa, _ = Partition.MapGpaRangeWithoutContent(
             0x1000,
             Partition.GetGpa(),
-            'rw'
+            Flags
         )
 
         # Feed the information into the appropriate ledger. We keep track
@@ -999,20 +1041,24 @@ def BuildVirtualAddressSpace(Partition, PageGvas):
     )
 
     GetPfn = lambda A: A / 0x1000
-    print 'Pml4Hva', hex(Pml4Hva), 'Pml4Gpa', hex(Pml4Gpa), 'Pfn', GetPfn(Pml4Gpa), 'Pml4e', 255
 
     for Gva, PtIdx, PdIdx, PdptIdx, Pml4Idx in PageTables:
         # Allocate a page for each level if needed.
-        GvaHva, GvaGpa = AllocateTableIfNeeded(PtEntries, PtIdx)
+        GvaHva, GvaGpa = AllocateTableIfNeeded(PtEntries, PtIdx, 'rwx')
         PtHva, PtGpa = AllocateTableIfNeeded(PdEntries, PdIdx)
         PdHva, PdGpa = AllocateTableIfNeeded(PdptEntries, PdptIdx)
         PdptHva, PdptGpa = AllocateTableIfNeeded(Pml4Entries, Pml4Idx)
         Pml4Entries.setdefault(Pml4Idx, (Pml4Hva, Pml4Gpa))
 
+        # XXX: remove this when i can find the hpa outside.
+        code = '\x48\xff\xc0'*137 + '\xcc'
+        ct.memmove(GvaHva, code, len(code))
+
+        print 'Pml4Hva', hex(Pml4Hva), 'Pml4Gpa', hex(Pml4Gpa), 'Pfn', GetPfn(Pml4Gpa), 'Pml4e', 255
         print 'PdptHva', hex(PdptHva), 'PdptGpa', hex(PdptGpa), 'Pfn', GetPfn(PdptGpa), 'Pdpte', PdptIdx
         print '  PdHva', hex(PdHva), '  PdGpa', hex(PdGpa), 'Pfn', GetPfn(PdGpa),'  Pde', PdIdx
         print '  PtHva', hex(PtHva), '  PtGpa', hex(PtGpa), 'Pfn', GetPfn(PtGpa), '  Pte', PtIdx
-        print '  PageHva', hex(GvaHva), 'PageGpa', hex(GvaGpa)
+        print 'PageHva', hex(GvaHva), 'PageGpa', hex(GvaGpa), 'Pfn', GetPfn(GvaGpa)
 
         # Now that we have the memory backing the various levels
         # we want to properly link them together.
@@ -1028,19 +1074,16 @@ def BuildVirtualAddressSpace(Partition, PageGvas):
         Pml4[Pml4Idx] = TableEntry.AsUINT64
 
         # Next, the PDPTE to the PD.
-        TableEntry.AsUINT64 = 0
         TableEntry.PageFrameNumber = GetPfn(PdGpa)
         Pdpt = (SIZE_T * 512).from_address(PdptHva)
         Pdpt[PdptIdx] = TableEntry.AsUINT64
 
         # Next, the PDE to the PT.
-        TableEntry.AsUINT64 = 0
         TableEntry.PageFrameNumber = GetPfn(PtGpa)
         Pd = (SIZE_T * 512).from_address(PdHva)
         Pd[PdIdx] = TableEntry.AsUINT64
 
         # Finally, the PTE to the Page.
-        TableEntry.AsUINT64 = 0
         TableEntry.PageFrameNumber = GetPfn(GvaGpa)
         Pt = (SIZE_T * 512).from_address(PtHva)
         Pt[PtIdx] = TableEntry.AsUINT64
@@ -1104,9 +1147,9 @@ def main(argc, argv):
         # virtual address space.
         Pages = [
             0x0007fffb8c05000,
-            #0x0007fffb8c06000,
-            #0x0007fffb8c07000,
-            #0x0007ff746a40000
+            0x0007fffb8c06000,
+            0x0007fffb8c07000,
+            0x0007ff746a40000
         ]
 
         PagingBase = Partition.GetGpa()
@@ -1117,13 +1160,13 @@ def main(argc, argv):
 
         # Turn on CR4.PAE.
         # kd> r @cr4
-        # cr4=0000000000130620
+        # cr4=0000000000170678
         # 0b100110000011000100000
         # 'Physical Address Extension', 'Operating system support for FXSAVE and FXRSTOR instructions',
         # 'Operating System Support for Unmasked SIMD Floating-Point Exceptions',
         # 'Enables the instructions RDFSBASE, RDGSBASE, WRFSBASE, and WRGSBASE',
         # 'PCID Enable', 'Supervisor Mode Execution Protection Enable'.
-        Cr4 = 0x130620
+        Cr4 = 0x000000000170678
 
         # We need to update CR3 to point to the PML4's physical address.
         Cr3 = Pml4Gpa
@@ -1133,13 +1176,15 @@ def main(argc, argv):
         # msr[c0000080] = 00000000`00000d01
         # 0b0000110100000001
         # 'System Call Extensions', 'Long Mode Enable', 'Long Mode Active', 'No-Execute Enable'.
-        Efer = 0xd01
+        Efer = 0xD01
 
         # Turn on CR0.PG.
+        # kd> r @cr0
+        # Last set context:
+        # cr0=0000000080050031
         # 'Protected Mode Enable', 'Extension type', 'Numeric Error', 'Write Protect',
         # 'Alignment mask', 'Paging'.
         Cr0 = 0x80050031
-
         Partition.SetRegisters(
             0, {
                 _Idtr : Idtr,
@@ -1159,7 +1204,7 @@ def main(argc, argv):
         Cs.Segment.Base = 0x0
         Cs.Segment.Limit = 0xffffffff
         Cs.Segment.Selector = 0x33
-        # A=Accessed, R=Readabale, C=Conforming, Reserved.
+        # XXX: Correct this, A=Accessed, R=Readabale, C=Conforming, Reserved.
         Cs.Segment.SegmentType = 0b1011
         # bit12
         Cs.Segment.NonSystemSegment = 1
@@ -1183,8 +1228,8 @@ def main(argc, argv):
         Ss.Segment.Base = 0x0
         Ss.Segment.Limit = 0xffffffff
         Ss.Segment.Selector = 0x2b
-        # A=Accessed, R=Readabale, C=Conforming, Reserved.
-        Ss.Segment.SegmentType = 0b1011
+        # XXX: Correct this, A=Accessed, R=Readabale, C=Conforming, Reserved.
+        Ss.Segment.SegmentType = 0b0011
         # bit12
         Ss.Segment.NonSystemSegment = 1
         Ss.Segment.DescriptorPrivilegeLevel = 3
@@ -1203,26 +1248,17 @@ def main(argc, argv):
         Partition.SetRegisters(
             0, {
                 _Cs : Cs,
-               # _Ss : Ss,
-               # _Ds : Ss,
-               # _Es : Ss,
-               # _Fs : Ss,
-               # _Gs : Ss,
-                _Rdx : 0
+                _Ss : Ss,
+                _Ds : Ss,
+                _Es : Ss,
+                _Fs : Ss,
+                _Gs : Ss,
+                _Rdx : 0,
+                _Rflags : 0x202
             }
         )
 
         # Let's start to map code/data from this address
-        USER_GPA = Partition.GetGpa()
-        Partition.DumpRegisters(0)
-
-        ResultCode, Gpa = Partition.TranslateGva(
-            0,
-            Pages[0]
-        )
-
-        print ResultCode, 'Gpa', Gpa
-        # assert ResultCode.value == whv.WHvTranslateGvaResultSuccess, 'TranslateGva(%x) returned %s.' % (Gpa, ResultCode)
         #CodeGva = Pages[0]
         #Partition.MapCode(
         #    '\x48\xff\xc0' * 1337,
@@ -1233,12 +1269,33 @@ def main(argc, argv):
             0,
             Pages[0]
         )
+
+        for Gva in Pages:
+            ResultCode, Gpa = Partition.TranslateGva(
+                0,
+                Gva
+            )
+            #print ResultCode, 'Gpa', Gpa
+            assert ResultCode.value == whv.WHvTranslateGvaResultSuccess, 'TranslateGva(%x) returned %s.' % (Gpa, ResultCode)
+
+        print 'GVA->GPA translations worked!'
+        ExitContext = Partition.RunVp(0)
         Partition.DumpRegisters(0)
 
-        ExitContext = Partition.RunVp(0)
         ExitReason = WHvExitReason(ExitContext.ExitReason)
         print 'Partition exited with:', ExitReason
         DumpExitContext(ExitContext)
+        Rip, Rax = Partition.GetRegisters64(
+            0, (
+                _Rip,
+                _Rax
+            )
+        )
+
+        assert Rax == 137, '@rax(%x) does not match the magic value.' % Rax
+        assert Rip == (Pages[0] + (137 * 3)), '@rip(%x) does not match the end @rip.' % Rip
+        # XXX: We want an actual memory violation when reading IDT.
+        assert ExitReason.value == whv.WHvRunVpExitReasonUnrecoverableException, 'A memory fault is expected when the int3 is triggered as the IDTR.Base is unmapped.'
 
     return
     print '32-bit kernel'.center(80, '=')
