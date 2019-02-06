@@ -1275,7 +1275,7 @@ def main(argc, argv):
                 0,
                 Gva
             )
-            #print ResultCode, 'Gpa', Gpa
+            print 'Gva: %016x to Gpa %016x' % (Gva, Gpa)
             assert ResultCode.value == whv.WHvTranslateGvaResultSuccess, 'TranslateGva(%x) returned %s.' % (Gpa, ResultCode)
 
         print 'GVA->GPA translations worked!'

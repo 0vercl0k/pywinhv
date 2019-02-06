@@ -24,16 +24,16 @@
 #define C_ASSERT(...) /**/
 #define DECLSPEC_ALIGN(...) /**/
 
+// For dealing with __stdcall (CALLBACK, WINAPI).
+#define CALLBACK __stdcall
+%include windows.i
+
 // Ugly but tells SWIG to generate proxy functions to create various pointers.
 // XXX: Use typemaps.
 %include cpointer.i
 %pointer_functions(UINT32, PUINT32)
 %pointer_functions(UINT64, PUINT64)
 %pointer_functions(WHV_PARTITION_HANDLE, PWHV_PARTITION_HANDLE)
-
-// For dealing with __stdcall (CALLBACK, WINAPI).
-#define CALLBACK __stdcall
-%include windows.i
 
 // This is required to set WINAPI_FAMILY to the proper value when preprocessing
 // the WinHv header files.
