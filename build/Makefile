@@ -30,6 +30,8 @@ _pywinhv.pyd: src\_pywinhv.c.o
 test: _pywinhv.pyd
     @echo Testing...
     python ..\pywinhv\winhvplatform.py
+    python ..\test64.py
+    python ..\test32.py
 
 .PHONY: clean
 clean:
