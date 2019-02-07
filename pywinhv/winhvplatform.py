@@ -832,13 +832,35 @@ class WHvPartition(object):
         assert Success, 'WHvTranslateGva failed with: %x.' % Ret
         return (WHvTranslateGvaResultCode(ResultCode), Gpa)
 
-def Generate32bCodeSegment():
-    '''Generate a 32-bit code ring0'''
+    def TranslateGpa(self, Gpa):
+        '''Translate a Gpa to an Hva.'''
+        return self.TranslationTable.get(Gpa, None)
+
+    def TranslateGvaToHva(self, VpIndex, Gva, Flags = None):
+        '''Translate a Gva to an Hva.'''
+        if Flags is None:
+            Flags = whv.WHvTranslateGvaFlagValidateRead | whv.WHvTranslateGvaFlagPrivilegeExempt
+
+        ResultCode, Gpa = self.TranslateGva(
+            VpIndex,
+            Gva,
+            Flags
+        )
+
+        assert ResultCode.value == whv.WHvTranslateGvaResultSuccess, 'TranslateGva(%x) failed with %s' % (Gva, ResultCode)
+        return self.TranslationTable.get(Gpa)
+
+def Generate32bCodeSegment(Selector = 0x1337):
+    '''Generate a 32-bit code ring0 segment.'''
     CsSegment = whv.WHV_REGISTER_VALUE()
     CsSegment.Segment.Base = 0x0
     CsSegment.Segment.Limit = 0xffffffff
-    CsSegment.Segment.Selector = 0x1337
-    # A=Accessed, R=Readabale, C=Conforming, Reserved.
+    CsSegment.Segment.Selector = Selector
+    # SegmentType is 4 bits long, starting at bit8.
+    # Bit08: A=Accessed,
+    # Bit09: R=Readabale,
+    # Bit10: C=Conforming,
+    # Bit11: Reserved, has to be 1.
     CsSegment.Segment.SegmentType = 0b1011
     # bit12
     CsSegment.Segment.NonSystemSegment = 1
@@ -855,9 +877,63 @@ def Generate32bCodeSegment():
     CsSegment.Segment.Granularity = 1
     return CsSegment
 
-def Config32bEnvironment(Partition):
-    '''XXX: remove this'''
-    pass
+def Generate64bUserCodeSegment(Selector = 0x33):
+    '''Generate a 64-bit code user segment.'''
+    Cs = whv.WHV_REGISTER_VALUE()
+    Cs.Segment.Base = 0x0
+    Cs.Segment.Limit = 0xffffffff
+    Cs.Segment.Selector = Selector
+    # SegmentType is 4 bits long, starting at bit8.
+    # Bit08: A=Accessed,
+    # Bit09: R=Readabale,
+    # Bit10: C=Conforming,
+    # Bit11: Code, must be 1.
+    # XXX: Unclear why clearing the Accessed bit triggers a
+    # WHvExitReason.WHvRunVpExitReasonInvalidVpRegisterValue.
+    Cs.Segment.SegmentType = 0b1011
+    # bit12
+    Cs.Segment.NonSystemSegment = 1
+    Cs.Segment.DescriptorPrivilegeLevel = 3
+    # P=Present.
+    Cs.Segment.Present = 1
+    # AVL=Available.
+    Cs.Segment.Available = 0
+    # L=Long-mode segment
+    Cs.Segment.Long = 1
+    # D=Default operand size.
+    Cs.Segment.Default = 0
+    # G=Granularity.
+    Cs.Segment.Granularity = 1
+    return Cs
+
+def Generate64bUserDataSegment(Base = 0, Selector = 0x2b):
+    '''Generate a 64-bit data user segment.'''
+    Data = whv.WHV_REGISTER_VALUE()
+    Data.Segment.Base = Base
+    Data.Segment.Limit = 0xffffffff
+    Data.Segment.Selector = 0x2b
+    # SegmentType is 4 bits long, starting at bit8.
+    # Bit08: A=Accessed,
+    # Bit09: W=Writeable,
+    # Bit10: E-D=Expand-down,
+    # Bit11: Data, must be 0.
+    # XXX: Unclear why clearing the Accessed bit triggers a
+    # WHvExitReason.WHvRunVpExitReasonInvalidVpRegisterValue.
+    Data.Segment.SegmentType = 0b0011
+    # bit12
+    Data.Segment.NonSystemSegment = 1
+    Data.Segment.DescriptorPrivilegeLevel = 3
+    # P=Present.
+    Data.Segment.Present = 1
+    # AVL=Available.
+    Data.Segment.Available = 0
+    # L=Long-mode segment
+    Data.Segment.Long = 1
+    # D=Default operand size.
+    Data.Segment.Default = 0
+    # G=Granularity.
+    Data.Segment.Granularity = 1
+    return Data
 
 class WHvExitReason(Enum):
     WHvRunVpExitReasonNone = 0x00000000
@@ -919,6 +995,16 @@ def DumpExitContext(ExitContext):
         print 'MemoryAccess.AccessInfo.GvaValid:', hex(A.GvaValid)
         print 'MemoryAccess.Gpa:', hex(M.Gpa)
         print 'MemoryAccess.Gva:', hex(M.Gva)
+    elif E.ExitReason == whv.WHvRunVpExitReasonX64Cpuid:
+        C = E.CpuidAccess
+        print 'CpuidAccess.Rax:', hex(C.Rax)
+        print 'CpuidAccess.Rcx:', hex(C.Rcx)
+        print 'CpuidAccess.Rdx:', hex(C.Rdx)
+        print 'CpuidAccess.Rbx:', hex(C.Rbx)
+        print 'CpuidAccess.DefaultResultRax:', hex(C.DefaultResultRax)
+        print 'CpuidAccess.DefaultResultRcx:', hex(C.DefaultResultRcx)
+        print 'CpuidAccess.DefaultResultRdx:', hex(C.DefaultResultRdx)
+        print 'CpuidAccess.DefaultResultRbx:', hex(C.DefaultResultRbx)
 
 def CR0(Cr0):
     '''Return a string representation of CR0.'''
@@ -988,7 +1074,7 @@ def BuildVirtualAddressSpace(Partition, PageGvas):
         * The virtual-address is broken down like this:
             [Unused - 16 bits][PML4 Index - 9 bits][PDPT Index - 9 bits][PD Index - 9 bits][PT Index - 9 bits][Page Offset 12 bits]
     '''
-
+    # XXX: Handle page rights and kernel mode pages maybe?
     PageTables = []
 
     # Walk the GVA and keep track of the various paging structures
@@ -1049,10 +1135,6 @@ def BuildVirtualAddressSpace(Partition, PageGvas):
         PdHva, PdGpa = AllocateTableIfNeeded(PdptEntries, PdptIdx)
         PdptHva, PdptGpa = AllocateTableIfNeeded(Pml4Entries, Pml4Idx)
         Pml4Entries.setdefault(Pml4Idx, (Pml4Hva, Pml4Gpa))
-
-        # XXX: remove this when i can find the hpa outside.
-        code = '\x48\xff\xc0'*137 + '\xcc'
-        ct.memmove(GvaHva, code, len(code))
 
         print 'Pml4Hva', hex(Pml4Hva), 'Pml4Gpa', hex(Pml4Gpa), 'Pfn', GetPfn(Pml4Gpa), 'Pml4e', 255
         print 'PdptHva', hex(PdptHva), 'PdptGpa', hex(PdptGpa), 'Pfn', GetPfn(PdptGpa), 'Pdpte', PdptIdx
@@ -1127,7 +1209,7 @@ def main(argc, argv):
         # This allow us to trigger a memory access violation when it is read.
         IdtGpa = Partition.GetGpa()
         Idtr = whv.WHV_REGISTER_VALUE()
-        Idtr.Table.Base = IdtGpa
+        Idtr.Table.Base = 0xffffffff00000000
         Idtr.Table.Limit = 0
 
         # Let's enable long mode now...
@@ -1138,18 +1220,13 @@ def main(argc, argv):
         #   * Enable long mode by setting the EFER.LME flag in MSR 0xC0000080
         #   * Enable paging
 
-        # Little remainder how this shit works: PML4->PDPT->PD->PT (aka 4 level paging).
-        # Each entry are 8 bytes long, and each table have 512 entries.
-        # This allow us to address at most: (4096 * PAGE_SIZE) * 4096 * 4096 * 4096
-        # PML4 physical address.
-        #
         # OK so we need to allocate memory for paging structures, and build the
         # virtual address space.
         Pages = [
             0x0007fffb8c05000,
             0x0007fffb8c06000,
             0x0007fffb8c07000,
-            0x0007ff746a40000
+            0x0007ff746a40000,
         ]
 
         PagingBase = Partition.GetGpa()
@@ -1200,74 +1277,25 @@ def main(argc, argv):
         # We should be good to set-up 64-bit user-mode segments now.
         # 0:000> r @cs
         # cs=0033
-        Cs = whv.WHV_REGISTER_VALUE()
-        Cs.Segment.Base = 0x0
-        Cs.Segment.Limit = 0xffffffff
-        Cs.Segment.Selector = 0x33
-        # XXX: Correct this, A=Accessed, R=Readabale, C=Conforming, Reserved.
-        Cs.Segment.SegmentType = 0b1011
-        # bit12
-        Cs.Segment.NonSystemSegment = 1
-        Cs.Segment.DescriptorPrivilegeLevel = 3
-        # P=Present.
-        Cs.Segment.Present = 1
-        # AVL=Available.
-        Cs.Segment.Available = 0
-        # L=Long-mode segment
-        Cs.Segment.Long = 1
-        # D=Default operand size.
-        Cs.Segment.Default = 0
-        # G=Granularity.
-        Cs.Segment.Granularity = 1
-
+        Cs = Generate64bUserCodeSegment()
         # 0:001> r @ss
         # ss=002b
+        DataSegment = Generate64bUserDataSegment()
         # 0:001> r @fs
         # fs=0053
-        Ss = whv.WHV_REGISTER_VALUE()
-        Ss.Segment.Base = 0x0
-        Ss.Segment.Limit = 0xffffffff
-        Ss.Segment.Selector = 0x2b
-        # XXX: Correct this, A=Accessed, R=Readabale, C=Conforming, Reserved.
-        Ss.Segment.SegmentType = 0b0011
-        # bit12
-        Ss.Segment.NonSystemSegment = 1
-        Ss.Segment.DescriptorPrivilegeLevel = 3
-        # P=Present.
-        Ss.Segment.Present = 1
-        # AVL=Available.
-        Ss.Segment.Available = 0
-        # L=Long-mode segment
-        Ss.Segment.Long = 1
-        # D=Default operand size.
-        Ss.Segment.Default = 0
-        # G=Granularity.
-        Ss.Segment.Granularity = 1
+        TebSegment = Generate64bUserDataSegment(Pages[1], 0x2b)
 
         # XXX: Configure GS.
         Partition.SetRegisters(
             0, {
                 _Cs : Cs,
-                _Ss : Ss,
-                _Ds : Ss,
-                _Es : Ss,
-                _Fs : Ss,
-                _Gs : Ss,
-                _Rdx : 0,
-                _Rflags : 0x202
+                _Ss : DataSegment,
+                _Ds : DataSegment,
+                _Es : DataSegment,
+                _Fs : DataSegment,
+                #_Gs : TebSegment,
+                #_Rdx : 0, XXX Figure out where the 806e9 is coming from.
             }
-        )
-
-        # Let's start to map code/data from this address
-        #CodeGva = Pages[0]
-        #Partition.MapCode(
-        #    '\x48\xff\xc0' * 1337,
-        #    USER_GPA
-        #)
-
-        Partition.SetRip(
-            0,
-            Pages[0]
         )
 
         for Gva in Pages:
@@ -1275,10 +1303,26 @@ def main(argc, argv):
                 0,
                 Gva
             )
-            print 'Gva: %016x to Gpa %016x' % (Gva, Gpa)
+            print 'GVA: %016x translated to GPA: %016x' % (Gva, Gpa)
             assert ResultCode.value == whv.WHvTranslateGvaResultSuccess, 'TranslateGva(%x) returned %s.' % (Gpa, ResultCode)
 
         print 'GVA->GPA translations worked!'
+
+        # Go write initialize it with some code.
+        CodeHva = Partition.TranslateGvaToHva(
+            0,
+            Pages[0]
+        )
+
+        print 'Translated GVA:%x to HVA:%x' % (Pages[0], CodeHva)
+        Code = '\x65\x48\xff\x00' + '\x48\xff\xc0' * 137 + '\xcc'
+        Code =  '\x48\xff\xc0' * 1 + '\xcc'
+        ct.memmove(CodeHva, Code, len(Code))
+        Partition.SetRip(
+            0,
+            Pages[0]
+        )
+
         ExitContext = Partition.RunVp(0)
         Partition.DumpRegisters(0)
 
