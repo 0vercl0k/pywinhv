@@ -78,11 +78,8 @@ def main(argc, argv):
         )
 
         assert Rip == (CODE_GPA + 0x1337), '@rax(%x) does not match the magic value.' % Rax
-        assert ExitReason.value == hv.WHvRunVpExitReasonMemoryAccess, 'A memory fault is expected when the int3 is triggered as the IDTR.Base is unmapped.'
-        FaultGpa = ExitContext.MemoryAccess.Gpa
-        InterruptionPending = ExitContext.VpContext.ExecutionState.InterruptionPending
-        InIdtBound = FaultGpa > IDT_GPA and FaultGpa < (IDT_GPA + Idtr.Table.Limit)
-        assert InterruptionPending and InIdtBound, 'The GPA faulting must be in the bound of the IDT.'
+        assert ExitReason.value == hv.WHvRunVpExitReasonException, 'An exception VMEXIT is expected when the int3 is triggered.'
+        assert ExitContext.VpException.ExceptionType == hv.WHvX64ExceptionTypeBreakpointTrap, 'A breakpoint exception is expected.'
     print 'All good!'
     return 0
 

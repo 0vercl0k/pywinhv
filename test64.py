@@ -31,13 +31,11 @@ def main(argc, argv):
 
         # OK so we need to allocate memory for paging structures, and build the
         # virtual address space.
-        IdtGva = 0xfffff803dc545000
         Pages = [
             0x00007fffb8c05000,
             0x00007fffb8c06000,
             0x00007fffb8c07000,
             0x00007ff746a40000,
-            IdtGva
         ]
 
         PagingBase = Partition.GetGpa()
@@ -119,29 +117,6 @@ def main(argc, argv):
 
         print 'GVA->GPA translations worked!'
 
-        # Configure an IDT.
-        # Configure the base of the IDT where we don't have any memory mapped.
-        # This allow us to trigger a memory access violation when it is read.
-        Idtr = Partition.GetRegister(0, hv.Idtr)
-        print hex(Idtr.Table.Base), hex(Idtr.Table.Limit)
-        Idtr.Table.Base = IdtGva
-        Idtr.Table.Limit = 0
-        Partition.SetRegisters(0, {
-                hv.Idtr : Idtr,
-            }
-        )
-        Idtr = Partition.GetRegister(0, hv.Idtr)
-        print hex(Idtr.Table.Base), hex(Idtr.Table.Limit)
-
-        IdtHva = Partition.TranslateGvaToHva(
-            0,
-            Idtr.Table.Base
-        )
-
-        print 'IDT base is at HVA:%016x' % IdtHva
-        IdtContent = ('\xaa\xbb\x33\x00\x00' + chr(0b10001110) + '\x00\x00\xff\xff\xff\xff\x00\x00\x00\x00') * 256
-        memmove(IdtHva, IdtContent, len(IdtContent))
-
         # Go write initialize it with some code.
         CodeHva = Partition.TranslateGvaToHva(
             0,
@@ -172,8 +147,8 @@ def main(argc, argv):
 
         assert Rax == 137, '@rax(%x) does not match the magic value.' % Rax
         assert Rip == (Pages[0] + (137 * 3)), '@rip(%x) does not match the end @rip.' % Rip
-        # XXX: We want an actual memory violation when reading IDT.
-        assert ExitReason.value == hv.WHvRunVpExitReasonUnrecoverableException, 'A memory fault is expected when the int3 is triggered as the IDTR.Base is unmapped.'
+        assert ExitReason.value == hv.WHvRunVpExitReasonException, 'An exception VMEXIT is expected when the int3 is triggered.'
+        assert ExitContext.VpException.ExceptionType == hv.WHvX64ExceptionTypeBreakpointTrap, 'A breakpoint exception is expected.'
 
     print 'All good!'
     return 0

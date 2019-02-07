@@ -40,6 +40,24 @@ class WHvPartition(object):
         )
         assert Success, 'WHvSetPartitionProperty(ProcessorCount) failed in context manager with %x.' % Ret
 
+        # Set-up Exception exits.
+        Property.ExtendedVmExits.ExceptionExit = 1
+        Success, Ret = hvplat.WHvSetPartitionProperty(
+            self.Partition,
+            whv.WHvPartitionPropertyCodeExtendedVmExits,
+            Property
+        )
+        assert Success, 'WHvSetPartitionProperty(ExtendedVmExits) failed in context manager with %x.' % Ret
+
+        # Set-up the ExceptionExitBitmap.
+        Property.ExceptionExitBitmap = 1 << whv.WHvX64ExceptionTypeBreakpointTrap
+        Success, Ret = hvplat.WHvSetPartitionProperty(
+            self.Partition,
+            whv.WHvPartitionPropertyCodeExceptionExitBitmap,
+            Property
+        )
+        assert Success, 'WHvSetPartitionProperty(ExceptionExitBitmap) failed in context manager with %x.' % Ret
+
         # Activate the partition.
         Success, Ret = hvplat.WHvSetupPartition(self.Partition)
         assert Success, 'WHvSetupPartition failed in context manager with %x.' % Ret
