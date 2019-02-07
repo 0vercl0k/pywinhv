@@ -834,21 +834,26 @@ class WHvPartition(object):
 
     def TranslateGpa(self, Gpa):
         '''Translate a Gpa to an Hva.'''
-        return self.TranslationTable.get(Gpa, None)
+        Offset, GpaAligned = Gpa & 0xfff, Gpa & 0xfffffffffffff000
+        Hva = self.TranslationTable.get(GpaAligned, None)
+        if Hva is not None:
+            return Hva + Offset
+        return None
 
     def TranslateGvaToHva(self, VpIndex, Gva, Flags = None):
         '''Translate a Gva to an Hva.'''
         if Flags is None:
             Flags = whv.WHvTranslateGvaFlagValidateRead | whv.WHvTranslateGvaFlagPrivilegeExempt
 
+        Offset, GvaAligned = Gva & 0xfff, Gva & 0xfffffffffffff000
         ResultCode, Gpa = self.TranslateGva(
             VpIndex,
-            Gva,
+            GvaAligned,
             Flags
         )
 
         assert ResultCode.value == whv.WHvTranslateGvaResultSuccess, 'TranslateGva(%x) failed with %s' % (Gva, ResultCode)
-        return self.TranslationTable.get(Gpa)
+        return self.TranslateGpa(Gpa)
 
 def Generate32bCodeSegment(Selector = 0x1337):
     '''Generate a 32-bit code ring0 segment.'''
@@ -1205,12 +1210,6 @@ def main(argc, argv):
     with WHvPartition(**PartitionOptions) as Partition:
         print 'Partition created:', Partition
 
-        # Configure the base of the IDT where we don't have any memory mapped.
-        # This allow us to trigger a memory access violation when it is read.
-        IdtGpa = Partition.GetGpa()
-        Idtr = whv.WHV_REGISTER_VALUE()
-        Idtr.Table.Base = 0xffffffff00000000
-        Idtr.Table.Limit = 0
 
         # Let's enable long mode now...
         # https://wiki.osdev.org/Setting_Up_Long_Mode.
@@ -1222,11 +1221,13 @@ def main(argc, argv):
 
         # OK so we need to allocate memory for paging structures, and build the
         # virtual address space.
+        IdtGva = 0xfffff803dc545000
         Pages = [
-            0x0007fffb8c05000,
-            0x0007fffb8c06000,
-            0x0007fffb8c07000,
-            0x0007ff746a40000,
+            0x00007fffb8c05000,
+            0x00007fffb8c06000,
+            0x00007fffb8c07000,
+            0x00007ff746a40000,
+            IdtGva
         ]
 
         PagingBase = Partition.GetGpa()
@@ -1264,11 +1265,11 @@ def main(argc, argv):
         Cr0 = 0x80050031
         Partition.SetRegisters(
             0, {
-                _Idtr : Idtr,
                 _Cr0 : Cr0,
                 _Cr3 : Cr3,
                 _Cr4 : Cr4,
-                _Efer : Efer
+                _Efer : Efer,
+                _Rflags : 0x202
             }
         )
 
@@ -1307,6 +1308,29 @@ def main(argc, argv):
             assert ResultCode.value == whv.WHvTranslateGvaResultSuccess, 'TranslateGva(%x) returned %s.' % (Gpa, ResultCode)
 
         print 'GVA->GPA translations worked!'
+
+        # Configure an IDT.
+        # Configure the base of the IDT where we don't have any memory mapped.
+        # This allow us to trigger a memory access violation when it is read.
+        Idtr = Partition.GetRegister(0, _Idtr)
+        print hex(Idtr.Table.Base), hex(Idtr.Table.Limit)
+        Idtr.Table.Base = IdtGva
+        Idtr.Table.Limit = 0
+        Partition.SetRegisters(0, {
+                _Idtr : Idtr,
+            }
+        )
+        Idtr = Partition.GetRegister(0, _Idtr)
+        print hex(Idtr.Table.Base), hex(Idtr.Table.Limit)
+
+        IdtHva = Partition.TranslateGvaToHva(
+            0,
+            Idtr.Table.Base
+        )
+
+        print 'IDT base is at HVA:%016x' % IdtHva
+        IdtContent = ('\xaa\xbb\x33\x00\x00' + chr(0b10001110) + '\x00\x00\xff\xff\xff\xff\x00\x00\x00\x00') * 256
+        ct.memmove(IdtHva, IdtContent, len(IdtContent))
 
         # Go write initialize it with some code.
         CodeHva = Partition.TranslateGvaToHva(
