@@ -65,11 +65,12 @@ def main(argc, argv):
         assert Rip == CODE_GPA, '@rip(%x) does not match what we assigned to it.' % Rip
 
         ExitContext = Partition.RunVp(0)
+        Partition.DumpRegisters(0)
+
         ExitReason = hv.WHvExitReason(ExitContext.ExitReason)
         print 'Partition exited with:', ExitReason
         hv.DumpExitContext(ExitContext)
 
-        Partition.DumpRegisters(0)
         Rip, Rax = Partition.GetRegisters64(
             0, (
                 hv.Rip,

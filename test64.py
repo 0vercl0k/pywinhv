@@ -124,8 +124,10 @@ def main(argc, argv):
         )
 
         print 'Translated GVA:%x to HVA:%x' % (Pages[0], CodeHva)
-        Code = '\x48\xff\xc0' * 137 + '\xcc'
-        #Code =  '\x48\xff\xc0' * 1 + '\xcc'
+        N = 137
+        IncRax = '\x48\xff\xc0'
+        Int3 = '\xcc'
+        Code = IncRax * N + Int3 + IncRax + Int3
         memmove(CodeHva, Code, len(Code))
         Partition.SetRip(
             0,
@@ -137,7 +139,7 @@ def main(argc, argv):
 
         ExitReason = hv.WHvExitReason(ExitContext.ExitReason)
         print 'Partition exited with:', ExitReason
-        hv.DumpExitContext(ExitContext)
+
         Rip, Rax = Partition.GetRegisters64(
             0, (
                 hv.Rip,
@@ -145,8 +147,38 @@ def main(argc, argv):
             )
         )
 
-        assert Rax == 137, '@rax(%x) does not match the magic value.' % Rax
-        assert Rip == (Pages[0] + (137 * 3)), '@rip(%x) does not match the end @rip.' % Rip
+        assert Rax == N, '@rax(%x) does not match the magic value.' % Rax
+        ExpectedRip = Pages[0] + (N * len(IncRax))
+        assert Rip == ExpectedRip, '@rip(%x) does not match the end @rip.' % Rip
+        assert ExitReason.value == hv.WHvRunVpExitReasonException, 'An exception VMEXIT is expected when the int3 is triggered.'
+        assert ExitContext.VpException.ExceptionType == hv.WHvX64ExceptionTypeBreakpointTrap, 'A breakpoint exception is expected.'
+        VpContext = ExitContext.VpContext
+        assert VpContext.InstructionLength == len(Int3), 'The instruction length(%x) is supposed to be 1.' % VpContext.InstructionLength
+
+        print 'Successfully caught the first int3 interruption, stepping over it..'
+        Partition.SetRegisters(
+            0, {
+                hv.Rip : ExpectedRip + 1
+            }
+        )
+
+        ExitContext = Partition.RunVp(0)
+        Partition.DumpRegisters(0)
+
+        ExitReason = hv.WHvExitReason(ExitContext.ExitReason)
+        print 'Partition exited with:', ExitReason
+        hv.DumpExitContext(ExitContext)
+
+        Rip, Rax = Partition.GetRegisters64(
+            0, (
+                hv.Rip,
+                hv.Rax
+            )
+        )
+
+        assert Rax == N + 1, '@rax(%x) does not match the magic value.' % Rax
+        ExpectedRip += len(Int3) + len(IncRax)
+        assert Rip == ExpectedRip, '@rip(%x) does not match the end @rip.' % Rip
         assert ExitReason.value == hv.WHvRunVpExitReasonException, 'An exception VMEXIT is expected when the int3 is triggered.'
         assert ExitContext.VpException.ExceptionType == hv.WHvX64ExceptionTypeBreakpointTrap, 'A breakpoint exception is expected.'
 

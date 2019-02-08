@@ -149,6 +149,16 @@ def DumpExitContext(ExitContext):
         print 'CpuidAccess.DefaultResultRcx:', hex(C.DefaultResultRcx)
         print 'CpuidAccess.DefaultResultRdx:', hex(C.DefaultResultRdx)
         print 'CpuidAccess.DefaultResultRbx:', hex(C.DefaultResultRbx)
+    elif E.ExitReason == whv.WHvRunVpExitReasonException:
+        V = E.VpException
+        print 'VpException.InstructionByteCount:', hex(V.InstructionByteCount)
+        # XXX: UINT8 InstructionBytes[16];
+        EI = V.ExceptionInfo
+        print 'VpException.ExceptionInfo.ErrorCodeValid:', hex(EI.ErrorCodeValid)
+        print 'VpException.ExceptionInfo.SoftwareException:', hex(EI.SoftwareException)
+        print 'VpException.ExceptionType:', hex(V.ExceptionType)
+        print 'VpException.ErrorCode:', hex(V.ErrorCode)
+        print 'VpException.ExceptionParameter:', hex(V.ExceptionParameter)
 
 def CR0(Cr0):
     '''Return a string representation of CR0.'''
