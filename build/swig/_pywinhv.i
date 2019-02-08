@@ -68,6 +68,12 @@
     }
 }
 
+%extend WHV_PARTITION_MEMORY_COUNTERS {
+    size_t __len__() {
+        return sizeof(*$self);
+    }
+}
+
 // Expose functions to create WHV_REGISTER_NAME / WHV_REGISTER_VALUE arrays.
 %include carrays.i
 %array_class(WHV_REGISTER_NAME, WHV_REGISTER_NAME_ARRAY)

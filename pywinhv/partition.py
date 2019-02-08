@@ -317,4 +317,12 @@ class WHvPartition(object):
         assert ResultCode.value == whv.WHvTranslateGvaResultSuccess, 'TranslateGva(%x) failed with %s' % (Gva, ResultCode)
         return self.TranslateGpa(Gpa)
 
+    def GetPartitionCounters(self, Counter):
+        '''Get partition counters.'''
+        Success, Counters, Ret = hvplat.WHvGetPartitionCounters(
+            self.Partition,
+            Counter
+        )
 
+        assert Success, 'WHvGetPartitionCounters failed with: %x.' % Ret
+        return Counters

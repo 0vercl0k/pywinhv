@@ -182,6 +182,12 @@ def main(argc, argv):
         assert ExitReason.value == hv.WHvRunVpExitReasonException, 'An exception VMEXIT is expected when the int3 is triggered.'
         assert ExitContext.VpException.ExceptionType == hv.WHvX64ExceptionTypeBreakpointTrap, 'A breakpoint exception is expected.'
 
+        MemoryCounters = Partition.GetPartitionCounters(hv.WHvPartitionCounterSetMemory)
+        print MemoryCounters
+        print 'Mapped4KPageCount:', hex(MemoryCounters.Mapped4KPageCount)
+        print 'Mapped2MPageCount:', hex(MemoryCounters.Mapped2MPageCount)
+        print 'Mapped1GPageCount:', hex(MemoryCounters.Mapped1GPageCount)
+
     print 'All good!'
     return 0
 
