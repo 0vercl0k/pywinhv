@@ -326,3 +326,21 @@ class WHvPartition(object):
 
         assert Success, 'WHvGetPartitionCounters failed with: %x.' % Ret
         return Counters
+
+    def GetVpCounters(self, VpIndex, Counter):
+        '''Get virtual processor counters.'''
+        Success, Counters, Ret = hvplat.WHvGetVirtualProcessorCounters(
+            self.Partition,
+            VpIndex,
+            Counter
+        )
+
+        assert Success, 'WHvGetVirtualProcessorCounters failed with: %x.' % Ret
+        return Counters
+
+def main(argc, argv):
+    return 0
+
+if __name__ == '__main__':
+    sys.exit(main(len(sys.argv), sys.argv))
+

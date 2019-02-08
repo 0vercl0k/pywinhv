@@ -1,5 +1,6 @@
 // Axel '0vercl0k' Souchet - 4 Feb 2019
 #include <windows.h>
+#include <WinHvPlatformDefs.h>
 
 typedef struct {
     union {
@@ -21,3 +22,10 @@ typedef struct {
         UINT64 AsUINT64;
     };
 } MMPTE_HARDWARE;
+
+typedef union {
+    WHV_PROCESSOR_RUNTIME_COUNTERS Runtime;
+    WHV_PROCESSOR_INTERCEPT_COUNTER Intercepts;
+    WHV_PROCESSOR_GUEST_EVENT_COUNTERS GuestEvents;
+    WHV_PROCESSOR_APIC_COUNTERS Apic;
+} WHV_PROCESSOR_ALL_COUNTERS;

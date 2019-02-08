@@ -572,6 +572,37 @@ def WHvGetPartitionCounters(Partition, CounterSet):
     whv.delete_PUINT32(BytesWritten)
     return (Success, Buffer, Ret & 0xffffffff)
 
+def WHvGetVirtualProcessorCounters(Partition, VpIndex, CounterSet):
+    '''
+    HRESULT
+    WINAPI
+    WHvGetVirtualProcessorCounters(
+        _In_ WHV_PARTITION_HANDLE Partition,
+        _In_ UINT32 VpIndex,
+        _In_ WHV_PROCESSOR_COUNTER_SET CounterSet,
+        _Out_writes_bytes_to_(BufferSizeInBytes, *BytesWritten) VOID* Buffer,
+        _In_ UINT32 BufferSizeInBytes,
+        _Out_opt_ UINT32* BytesWritten
+        );
+    '''
+    Buffer = whv.WHV_PROCESSOR_ALL_COUNTERS()
+    BufferSizeInBytes = len(Buffer)
+    BytesWritten = whv.new_PUINT32()
+    Ret = whv.WHvGetVirtualProcessorCounters(
+        Partition,
+        VpIndex,
+        CounterSet,
+        Buffer,
+        BufferSizeInBytes,
+        BytesWritten
+    )
+
+    Success = Ret == 0
+    # Release the UINT32 pointer.
+    whv.delete_PUINT32(BytesWritten)
+    return (Success, Buffer, Ret & 0xffffffff)
+
+
 class WHvExitReason(Enum):
     WHvRunVpExitReasonNone = 0x00000000
     WHvRunVpExitReasonMemoryAccess = 0x00000001
@@ -604,7 +635,8 @@ def main(argc, argv):
         whv.WHV_CAPABILITY : 8,
         whv.WHV_PARTITION_PROPERTY : 32,
         whv.WHV_REGISTER_VALUE : 16,
-        whv.WHV_PARTITION_MEMORY_COUNTERS : 24 
+        whv.WHV_PARTITION_MEMORY_COUNTERS : 24,
+        whv.WHV_PROCESSOR_ALL_COUNTERS : 40
     }
 
     for Struct, StructSize in StructSizes.iteritems():
