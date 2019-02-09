@@ -235,7 +235,7 @@ def BuildVirtualAddressSpace(Partition, PageGvas, Policy):
         * PML4->PDPT->PD->PT,
         * Each entry are 8 bytes long,
         * The virtual-address is broken down like this:
-            [Unused - 16 bits][PML4 Index - 9 bits][PDPT Index - 9 bits][PD Index - 9 bits][PT Index - 9 bits][Page Offset 12 bits]
+            [Unused - 16 bits][PML4 Index - 9 bits][PDPT Index - 9 bits][PD Index - 9 bits][PT Index - 9 bits][Page Offset - 12 bits]
     '''
     # Ensure page alignment of the GVAs.
     assert all(
