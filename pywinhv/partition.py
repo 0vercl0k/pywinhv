@@ -15,7 +15,20 @@ MEM_RESERVE = 0x00002000
 PAGE_READWRITE = 0x04
 
 class WHvPartition(object):
-    '''Context manager for Partition.'''
+    '''This is the Python abstraction for a Partition. The class
+    can also be used a context manager. In this class, a lot of efforts are taken
+    to hide a bunch of the WinHvPlatform APIs underlying details.
+    On top of that, it makes invoking the raw APIs (exposed by SWIG) more pythonic.
+    As there are a bunch of different addresses, I have tried to follow the following
+    convention:
+        * Partition object represent a 'guest',
+        * The process from which you are instantiating the Partition is the 'host',
+        * As a result - there are always three different addresses describing the same
+          piece of memory:
+          * The address in the host virtual address-space is an HVA,
+          * The address in the guest virtual address-space is a GVA,
+          * The address in the guest physical address-space is a GPA.
+    '''
     def __init__(self, **kwargs):
         '''Create and setup a Partition object.'''
         assert utils.IsHypervisorPresent(), 'The hypervisor platform APIs support must be turned on.'
@@ -143,10 +156,11 @@ class WHvPartition(object):
         return Registers
 
     def GetRegisters64(self, VpIndex, Registers):
-        '''Get registers of a VP and return the .Reg64 part.'''
+        '''Get VP registers and return the .Reg64 part.'''
         return self.GetRegisters(VpIndex, Registers, Reg64 = True)
 
     def GetRegister(self, VpIndex, Register):
+        '''Get a single VP register.'''
         return self.GetRegisters(
             VpIndex,
             (Register, )
@@ -228,6 +242,8 @@ class WHvPartition(object):
         )
 
     def MapGpaRangeWithoutContent(self, SizeInBytes, Gpa, Flags):
+        '''Map a GPA range in the partition. This takes care of allocating
+        memory in the host and mapping it in the guest.'''
         SizeInBytes = utils.Align2Page(SizeInBytes)
         Hva = VirtualAlloc(
             0,
@@ -251,7 +267,7 @@ class WHvPartition(object):
         return (Hva, Gpa, SizeInBytes)
 
     def MapGpaRange(self, Buffer, Gpa, Flags):
-        '''Map physical memory into the partition backed by process virtual-memory.'''
+        '''Map a GPA range in the partition and initialize it with content.'''
         Hva, _, SizeInBytes = self.MapGpaRangeWithoutContent(
             len(Buffer),
             Gpa,
@@ -262,26 +278,28 @@ class WHvPartition(object):
         return (Hva, SizeInBytes)
 
     def MapCode(self, Code, Gpa, Writeable = False):
-        '''Map code into the partition.'''
+        '''Map a GPA range used to host code in the partition.'''
         Flags = 'rx'
 
         if Writeable:
             Flags += 'w'
 
-        HostAddress, CodeLength = self.MapGpaRange(
+        Hva, CodeLength = self.MapGpaRange(
             Code,
             Gpa,
             'rx'
         )
 
-        return (HostAddress, CodeLength)
+        return (Hva, CodeLength)
 
     def GetGpa(self):
+        # XXX: this needs to change
         Gpa = self.CurrentGpa
         self.CurrentGpa += 0x1000
         return Gpa
 
     def TranslateGva(self, VpIndex, Gva, Flags = None):
+        '''Translate a GVA into a GPA.'''
         if Flags is None:
             Flags = whv.WHvTranslateGvaFlagValidateRead | whv.WHvTranslateGvaFlagPrivilegeExempt
 
@@ -296,7 +314,8 @@ class WHvPartition(object):
         return (hvplat.WHvTranslateGvaResultCode(ResultCode), Gpa)
 
     def TranslateGpa(self, Gpa):
-        '''Translate a Gpa to an Hva.'''
+        '''Translate a GPA to an HVA. This is only possible because we
+        keep track of every call made to map GPA ranges and store the HVA/GPA.'''
         Offset, GpaAligned = Gpa & 0xfff, Gpa & 0xfffffffffffff000
         Hva = self.TranslationTable.get(GpaAligned, None)
         if Hva is not None:
@@ -304,7 +323,8 @@ class WHvPartition(object):
         return None
 
     def TranslateGvaToHva(self, VpIndex, Gva, Flags = None):
-        '''Translate a Gva to an Hva.'''
+        '''Translate a GVA to an HVA. This combines TranslateGva / TranslateGpa to
+        go from a GVA to an HVA.'''
         if Flags is None:
             Flags = whv.WHvTranslateGvaFlagValidateRead | whv.WHvTranslateGvaFlagPrivilegeExempt
 
@@ -319,7 +339,7 @@ class WHvPartition(object):
         return self.TranslateGpa(Gpa) + Offset
 
     def GetPartitionCounters(self, Counter):
-        '''Get partition counters.'''
+        '''Get a partition performance counter.'''
         Success, Counters, Ret = hvplat.WHvGetPartitionCounters(
             self.Partition,
             Counter
@@ -329,7 +349,7 @@ class WHvPartition(object):
         return Counters
 
     def GetVpCounters(self, VpIndex, Counter):
-        '''Get virtual processor counters.'''
+        '''Get a virtual processor performance counter.'''
         Success, Counters, Ret = hvplat.WHvGetVirtualProcessorCounters(
             self.Partition,
             VpIndex,
@@ -337,7 +357,17 @@ class WHvPartition(object):
         )
 
         assert Success, 'WHvGetVirtualProcessorCounters failed with: %x.' % Ret
-        return Counters
+
+        Result = {
+            whv.WHvProcessorCounterSetRuntime : Counters.Runtime,
+            whv.WHvProcessorCounterSetIntercepts : Counters.Intercepts,
+            whv.WHvProcessorCounterSetEvents : Counters.GuestEvents,
+            whv.WHvProcessorCounterSetApic : Counters.Apic
+        }.get(Counter, None)
+
+        assert Result is not None, 'Counter(%x) has not been added to WHV_PROCESSOR_ALL_COUNTERS?' % Counter
+
+        return Result
 
 def main(argc, argv):
     return 0

@@ -208,11 +208,10 @@ def main(argc, argv):
         print 'Mapped1GPageCount:', hex(MemoryCounters.Mapped1GPageCount)
 
         print 'VP Guest Event Counters:'
-        Counters = Partition.GetVpCounters(
+        GuestEvents = Partition.GetVpCounters(
             0,
             hv.WHvProcessorCounterSetEvents
         )
-        GuestEvents = Counters.GuestEvents
         print 'PageFaultCount:', hex(GuestEvents.PageFaultCount)
         print 'ExceptionCount:', hex(GuestEvents.ExceptionCount)
         print 'InterruptCount:', hex(GuestEvents.InterruptCount)
