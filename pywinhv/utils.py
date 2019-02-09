@@ -217,7 +217,7 @@ def CR4(Cr4):
     return ' '.join(S)
 
 
-def BuildVirtualAddressSpace(Partition, PageGvas):
+def BuildVirtualAddressSpace(Partition, PageGvas, Policy):
     '''This function builds the proper paging structures necessary
     to back a set of GVAs pages.
 
@@ -228,9 +228,11 @@ def BuildVirtualAddressSpace(Partition, PageGvas):
         * The virtual-address is broken down like this:
             [Unused - 16 bits][PML4 Index - 9 bits][PDPT Index - 9 bits][PD Index - 9 bits][PT Index - 9 bits][Page Offset 12 bits]
     '''
+    # Ensure page alignment of the GVAs.
     assert all(
         map(lambda Gva: (Gva % 0x1000) == 0, PageGvas)
     ), 'GVAs are expected to be page aligned.'
+
     # XXX: Handle page rights and kernel mode pages maybe?
     PageTables = []
 
@@ -267,7 +269,7 @@ def BuildVirtualAddressSpace(Partition, PageGvas):
         # Allocate backing memory host side.
         Hva, Gpa, _ = Partition.MapGpaRangeWithoutContent(
             0x1000,
-            Partition.GetGpa(),
+            Policy.GetGpa(),
             Flags
         )
 
@@ -279,7 +281,7 @@ def BuildVirtualAddressSpace(Partition, PageGvas):
     # We know we need a PML4 table, so allocate it now.
     Pml4Hva, Pml4Gpa, _ = Partition.MapGpaRangeWithoutContent(
         0x1000,
-        Partition.GetGpa(),
+        Policy.GetGpa(),
         'rw'
     )
 

@@ -4,6 +4,17 @@ from ctypes import memmove
 import sys
 import struct
 
+class PackedPhysicalMemory(object):
+    '''The goal of this class is to provide a very simple GPA allocation policy.
+    It basically packs up the physical space page by page.'''
+    def __init__(self, BaseGpa = 0):
+        self.Gpa = 0
+
+    def GetGpa(self):
+        Gpa = self.Gpa
+        self.Gpa += 0x1000
+        return Gpa
+
 def main(argc, argv):
     HypervisorPresent = hv.IsHypervisorPresent()
     print 'HypervisorPresent:', HypervisorPresent
@@ -19,6 +30,7 @@ def main(argc, argv):
 
 
     with hv.WHvPartition(**PartitionOptions) as Partition:
+        PackedSpacePolicy = PackedPhysicalMemory()
         print 'Partition created:', Partition
 
 
@@ -42,10 +54,10 @@ def main(argc, argv):
             CodeGva
         ]
 
-        PagingBase = Partition.GetGpa()
         Pml4Gpa = hv.BuildVirtualAddressSpace(
             Partition,
-            Pages
+            Pages,
+            PackedSpacePolicy
         )
 
         # Turn on CR4.PAE.

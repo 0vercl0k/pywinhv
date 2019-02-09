@@ -32,7 +32,6 @@ class WHvPartition(object):
     def __init__(self, **kwargs):
         '''Create and setup a Partition object.'''
         assert utils.IsHypervisorPresent(), 'The hypervisor platform APIs support must be turned on.'
-        self.CurrentGpa = 0
         self.ProcessorCount = kwargs.get('ProcessorCount', 1)
         self.Name = kwargs.get('Name', 'DefaultName')
         self.ExceptionExitBitmap = kwargs.get('ExceptionExitBitmap', 0)
@@ -291,12 +290,6 @@ class WHvPartition(object):
         )
 
         return (Hva, CodeLength)
-
-    def GetGpa(self):
-        # XXX: this needs to change
-        Gpa = self.CurrentGpa
-        self.CurrentGpa += 0x1000
-        return Gpa
 
     def TranslateGva(self, VpIndex, Gva, Flags = None):
         '''Translate a GVA into a GPA.'''
