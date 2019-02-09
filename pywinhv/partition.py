@@ -50,7 +50,8 @@ class WHvPartition(object):
         assert Success, 'WHvSetPartitionProperty(ExtendedVmExits) failed in context manager with %x.' % Ret
 
         # Set-up the ExceptionExitBitmap.
-        Property.ExceptionExitBitmap = 1 << whv.WHvX64ExceptionTypeBreakpointTrap
+        Property.ExceptionExitBitmap  = 1 << whv.WHvX64ExceptionTypeBreakpointTrap
+        Property.ExceptionExitBitmap |= 1 << whv.WHvX64ExceptionTypePageFault
         Success, Ret = hvplat.WHvSetPartitionProperty(
             self.Partition,
             whv.WHvPartitionPropertyCodeExceptionExitBitmap,
@@ -315,7 +316,7 @@ class WHvPartition(object):
         )
 
         assert ResultCode.value == whv.WHvTranslateGvaResultSuccess, 'TranslateGva(%x) failed with %s' % (Gva, ResultCode)
-        return self.TranslateGpa(Gpa)
+        return self.TranslateGpa(Gpa) + Offset
 
     def GetPartitionCounters(self, Counter):
         '''Get partition counters.'''

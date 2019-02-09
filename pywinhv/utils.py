@@ -228,6 +228,9 @@ def BuildVirtualAddressSpace(Partition, PageGvas):
         * The virtual-address is broken down like this:
             [Unused - 16 bits][PML4 Index - 9 bits][PDPT Index - 9 bits][PD Index - 9 bits][PT Index - 9 bits][Page Offset 12 bits]
     '''
+    assert all(
+        map(lambda Gva: (Gva % 0x1000) == 0, PageGvas)
+    ), 'GVAs are expected to be page aligned.'
     # XXX: Handle page rights and kernel mode pages maybe?
     PageTables = []
 

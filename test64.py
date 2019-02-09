@@ -31,11 +31,14 @@ def main(argc, argv):
 
         # OK so we need to allocate memory for paging structures, and build the
         # virtual address space.
+        CodeGva = 0x00007fffb8c05000
+        TebGva = 0x000008b307ae000
         Pages = [
-            0x00007fffb8c05000,
             0x00007fffb8c06000,
             0x00007fffb8c07000,
             0x00007ff746a40000,
+            TebGva,
+            CodeGva
         ]
 
         PagingBase = Partition.GetGpa()
@@ -77,7 +80,7 @@ def main(argc, argv):
                 hv.Cr3 : Cr3,
                 hv.Cr4 : Cr4,
                 hv.Efer : Efer,
-                hv.Rflags : 0x202
+                #hv.Rflags : 0x202
             }
         )
 
@@ -92,7 +95,7 @@ def main(argc, argv):
         DataSegment = hv.Generate64bUserDataSegment()
         # 0:001> r @fs
         # fs=0053
-        TebSegment = hv.Generate64bUserDataSegment(Pages[1], 0x2b)
+        TebSegment = hv.Generate64bUserDataSegment(TebGva, 0x2b)
 
         # XXX: Configure GS.
         Partition.SetRegisters(
@@ -102,7 +105,7 @@ def main(argc, argv):
                 hv.Ds : DataSegment,
                 hv.Es : DataSegment,
                 hv.Fs : DataSegment,
-                #_Gs : TebSegment,
+                #hv.Gs : TebSegment,
                 #_Rdx : 0, XXX Figure out where the 806e9 is coming from.
             }
         )
@@ -120,18 +123,18 @@ def main(argc, argv):
         # Go write initialize it with some code.
         CodeHva = Partition.TranslateGvaToHva(
             0,
-            Pages[0]
+            CodeGva
         )
 
-        print 'Translated GVA:%x to HVA:%x' % (Pages[0], CodeHva)
+        print 'Translated GVA:%x to HVA:%x' % (CodeGva, CodeHva)
         N = 137
         IncRax = '\x48\xff\xc0'
         Int3 = '\xcc'
-        Code = IncRax * N + Int3 + IncRax + Int3
+        Code = (IncRax * N) + Int3 + IncRax + Int3
         memmove(CodeHva, Code, len(Code))
         Partition.SetRip(
             0,
-            Pages[0]
+            CodeGva
         )
 
         ExitContext = Partition.RunVp(0)
@@ -148,7 +151,7 @@ def main(argc, argv):
         )
 
         assert Rax == N, '@rax(%x) does not match the magic value.' % Rax
-        ExpectedRip = Pages[0] + (N * len(IncRax))
+        ExpectedRip = CodeGva + (N * len(IncRax))
         assert Rip == ExpectedRip, '@rip(%x) does not match the end @rip.' % Rip
         assert ExitReason.value == hv.WHvRunVpExitReasonException, 'An exception VMEXIT is expected when the int3 is triggered.'
         assert ExitContext.VpException.ExceptionType == hv.WHvX64ExceptionTypeBreakpointTrap, 'A breakpoint exception is expected.'
