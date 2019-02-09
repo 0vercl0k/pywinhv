@@ -2,6 +2,7 @@
 import pywinhv as hv
 from ctypes import memmove
 import sys
+import struct
 
 def main(argc, argv):
     HypervisorPresent = hv.IsHypervisorPresent()
@@ -80,7 +81,6 @@ def main(argc, argv):
                 hv.Cr3 : Cr3,
                 hv.Cr4 : Cr4,
                 hv.Efer : Efer,
-                #hv.Rflags : 0x202
             }
         )
 
@@ -95,9 +95,8 @@ def main(argc, argv):
         DataSegment = hv.Generate64bUserDataSegment()
         # 0:001> r @fs
         # fs=0053
-        TebSegment = hv.Generate64bUserDataSegment(TebGva, 0x2b)
+        TebSegment = hv.Generate64bUserDataSegment(TebGva)
 
-        # XXX: Configure GS.
         Partition.SetRegisters(
             0, {
                 hv.Cs : Cs,
@@ -105,7 +104,7 @@ def main(argc, argv):
                 hv.Ds : DataSegment,
                 hv.Es : DataSegment,
                 hv.Fs : DataSegment,
-                #hv.Gs : TebSegment,
+                hv.Gs : TebSegment,
                 #_Rdx : 0, XXX Figure out where the 806e9 is coming from.
             }
         )
@@ -120,17 +119,32 @@ def main(argc, argv):
 
         print 'GVA->GPA translations worked!'
 
-        # Go write initialize it with some code.
+        # Initialize the TEB page.
+        TebHva = Partition.TranslateGvaToHva(
+            0,
+            TebGva
+        )
+
+        print ' Teb: Translated GVA:%x to HVA:%x' % (TebGva, TebHva)
+        TebValue = 0xAABB
+        TebContent = struct.pack('<Q', TebValue)
+        memmove(TebHva, TebContent, len(TebContent))
+
+        # Go write some code.
         CodeHva = Partition.TranslateGvaToHva(
             0,
             CodeGva
         )
 
-        print 'Translated GVA:%x to HVA:%x' % (CodeGva, CodeHva)
+        print 'Code: Translated GVA:%x to HVA:%x' % (CodeGva, CodeHva)
         N = 137
+        # mov rax, gs:[0]
+        LoadGsInRax = '\x65\x48\x8b\x04\x25\x00\x00\x00\x00'
+        # inc rax
         IncRax = '\x48\xff\xc0'
+        # int3
         Int3 = '\xcc'
-        Code = (IncRax * N) + Int3 + IncRax + Int3
+        Code = LoadGsInRax + (IncRax * N) + Int3 + IncRax + Int3
         memmove(CodeHva, Code, len(Code))
         Partition.SetRip(
             0,
@@ -150,8 +164,9 @@ def main(argc, argv):
             )
         )
 
-        assert Rax == N, '@rax(%x) does not match the magic value.' % Rax
-        ExpectedRip = CodeGva + (N * len(IncRax))
+        ExpectedRax = N + TebValue
+        assert Rax == ExpectedRax, '@rax(%x) does not match the magic value.' % Rax
+        ExpectedRip = CodeGva + len(LoadGsInRax) + (N * len(IncRax))
         assert Rip == ExpectedRip, '@rip(%x) does not match the end @rip.' % Rip
         assert ExitReason.value == hv.WHvRunVpExitReasonException, 'An exception VMEXIT is expected when the int3 is triggered.'
         assert ExitContext.VpException.ExceptionType == hv.WHvX64ExceptionTypeBreakpointTrap, 'A breakpoint exception is expected.'
@@ -179,7 +194,8 @@ def main(argc, argv):
             )
         )
 
-        assert Rax == N + 1, '@rax(%x) does not match the magic value.' % Rax
+        ExpectedRax += 1
+        assert Rax == ExpectedRax, '@rax(%x) does not match the magic value.' % Rax
         ExpectedRip += len(Int3) + len(IncRax)
         assert Rip == ExpectedRip, '@rip(%x) does not match the end @rip.' % Rip
         assert ExitReason.value == hv.WHvRunVpExitReasonException, 'An exception VMEXIT is expected when the int3 is triggered.'

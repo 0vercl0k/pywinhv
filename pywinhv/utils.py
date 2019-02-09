@@ -81,7 +81,7 @@ def Generate64bUserDataSegment(Base = 0, Selector = 0x2b):
     Data = whv.WHV_REGISTER_VALUE()
     Data.Segment.Base = Base
     Data.Segment.Limit = 0xffffffff
-    Data.Segment.Selector = 0x2b
+    Data.Segment.Selector = Selector
     # SegmentType is 4 bits long, starting at bit8.
     # Bit08: A=Accessed,
     # Bit09: W=Writeable,
