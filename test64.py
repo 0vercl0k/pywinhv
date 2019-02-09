@@ -11,6 +11,7 @@ class PackedPhysicalMemory(object):
         self.Gpa = 0
 
     def GetGpa(self):
+        '''Get the next available GPA address.'''
         Gpa = self.Gpa
         self.Gpa += 0x1000
         return Gpa
@@ -28,11 +29,9 @@ def main(argc, argv):
        'Name' : '64b user'
     }
 
-
     with hv.WHvPartition(**PartitionOptions) as Partition:
         PackedSpacePolicy = PackedPhysicalMemory()
         print 'Partition created:', Partition
-
 
         # Let's enable long mode now...
         # https://wiki.osdev.org/Setting_Up_Long_Mode.

@@ -1,7 +1,7 @@
 # Axel '0vercl0k' Souchet - Februrary 7th 2019
 import pywinhv as whv
-from winhvplatform import *
 import sys
+from winhvplatform import *
 
 def IsHypervisorPresent():
     '''Is the support for the Hypervisor Platform APIs
@@ -15,7 +15,7 @@ def IsHypervisorPresent():
     return Success and Capabilities.HypervisorPresent == 1
 
 def Align2Page(Size):
-    '''Align the size to the next page size'''
+    '''Align the size to the next page size.'''
     if (Size % 0x1000) == 0:
         return Size
     return ((Size / 0x1000) + 1) * 0x1000
@@ -216,6 +216,15 @@ def CR4(Cr4):
     S.append('(%08x)' % C)
     return ' '.join(S)
 
+def GetPfnFromGpa(Gva):
+    '''Get the page frame number of the GVA.'''
+    return Gva / 0x1000
+
+def SplitAddress(Gva):
+    '''Split an address into a page aligned address and its offset.'''
+    Page = Gva & 0xfffffffffffff000
+    Offset = Gva & 0xfff
+    return Page, Offset
 
 def BuildVirtualAddressSpace(Partition, PageGvas, Policy):
     '''This function builds the proper paging structures necessary
@@ -285,8 +294,6 @@ def BuildVirtualAddressSpace(Partition, PageGvas, Policy):
         'rw'
     )
 
-    GetPfn = lambda A: A / 0x1000
-
     for Gva, PtIdx, PdIdx, PdptIdx, Pml4Idx in PageTables:
         # Allocate a page for each level if needed.
         GvaHva, GvaGpa = AllocateTableIfNeeded(PtEntries, PtIdx, 'rwx')
@@ -295,11 +302,11 @@ def BuildVirtualAddressSpace(Partition, PageGvas, Policy):
         PdptHva, PdptGpa = AllocateTableIfNeeded(Pml4Entries, Pml4Idx)
         Pml4Entries.setdefault(Pml4Idx, (Pml4Hva, Pml4Gpa))
 
-        print 'Pml4Hva', hex(Pml4Hva), 'Pml4Gpa', hex(Pml4Gpa), 'Pfn', GetPfn(Pml4Gpa), 'Pml4e', 255
-        print 'PdptHva', hex(PdptHva), 'PdptGpa', hex(PdptGpa), 'Pfn', GetPfn(PdptGpa), 'Pdpte', PdptIdx
-        print '  PdHva', hex(PdHva), '  PdGpa', hex(PdGpa), 'Pfn', GetPfn(PdGpa),'  Pde', PdIdx
-        print '  PtHva', hex(PtHva), '  PtGpa', hex(PtGpa), 'Pfn', GetPfn(PtGpa), '  Pte', PtIdx
-        print 'PageHva', hex(GvaHva), 'PageGpa', hex(GvaGpa), 'Pfn', GetPfn(GvaGpa)
+        print 'Pml4Hva', hex(Pml4Hva), 'Pml4Gpa', hex(Pml4Gpa), 'Pfn', GetPfnFromGpa(Pml4Gpa), 'Pml4e', 255
+        print 'PdptHva', hex(PdptHva), 'PdptGpa', hex(PdptGpa), 'Pfn', GetPfnFromGpa(PdptGpa), 'Pdpte', PdptIdx
+        print '  PdHva', hex(PdHva), '  PdGpa', hex(PdGpa), 'Pfn', GetPfnFromGpa(PdGpa),'  Pde', PdIdx
+        print '  PtHva', hex(PtHva), '  PtGpa', hex(PtGpa), 'Pfn', GetPfnFromGpa(PtGpa), '  Pte', PtIdx
+        print 'PageHva', hex(GvaHva), 'PageGpa', hex(GvaGpa), 'Pfn', GetPfnFromGpa(GvaGpa)
 
         # Now that we have the memory backing the various levels
         # we want to properly link them together.
@@ -310,22 +317,22 @@ def BuildVirtualAddressSpace(Partition, PageGvas, Policy):
         TableEntry.UserAccessible = 1
 
         # First, the PML4E to the PDPT.
-        TableEntry.PageFrameNumber = GetPfn(PdptGpa)
+        TableEntry.PageFrameNumber = GetPfnFromGpa(PdptGpa)
         Pml4 = (SIZE_T * 512).from_address(Pml4Hva)
         Pml4[Pml4Idx] = TableEntry.AsUINT64
 
         # Next, the PDPTE to the PD.
-        TableEntry.PageFrameNumber = GetPfn(PdGpa)
+        TableEntry.PageFrameNumber = GetPfnFromGpa(PdGpa)
         Pdpt = (SIZE_T * 512).from_address(PdptHva)
         Pdpt[PdptIdx] = TableEntry.AsUINT64
 
         # Next, the PDE to the PT.
-        TableEntry.PageFrameNumber = GetPfn(PtGpa)
+        TableEntry.PageFrameNumber = GetPfnFromGpa(PtGpa)
         Pd = (SIZE_T * 512).from_address(PdHva)
         Pd[PdIdx] = TableEntry.AsUINT64
 
         # Finally, the PTE to the Page.
-        TableEntry.PageFrameNumber = GetPfn(GvaGpa)
+        TableEntry.PageFrameNumber = GetPfnFromGpa(GvaGpa)
         Pt = (SIZE_T * 512).from_address(PtHva)
         Pt[PtIdx] = TableEntry.AsUINT64
 

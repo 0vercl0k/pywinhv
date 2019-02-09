@@ -105,6 +105,7 @@ class WHvPartition(object):
         return not BlockHasThrown
 
     def __repr__(self):
+        '''Pretty-pinter for the Partition object.'''
         return 'Partition(%r, ProcessorCount=%d)' % (
             self.Name,
             self.ProcessorCount
@@ -130,7 +131,7 @@ class WHvPartition(object):
         assert Success, 'WHvSetVirtualProcessorRegisters failed with %x.' % Ret
 
     def SetRip(self, VpIndex, Rip):
-        '''Set the @rip register of a VP'''
+        '''Set the @rip register of a VP.'''
         return self.SetRegisters(
             VpIndex, {
                 hvplat.Rip: Rip
@@ -309,7 +310,7 @@ class WHvPartition(object):
     def TranslateGpa(self, Gpa):
         '''Translate a GPA to an HVA. This is only possible because we
         keep track of every call made to map GPA ranges and store the HVA/GPA.'''
-        Offset, GpaAligned = Gpa & 0xfff, Gpa & 0xfffffffffffff000
+        GpaAligned, Offset = utils.SplitAddress(Gpa)
         Hva = self.TranslationTable.get(GpaAligned, None)
         if Hva is not None:
             return Hva + Offset
@@ -321,7 +322,7 @@ class WHvPartition(object):
         if Flags is None:
             Flags = whv.WHvTranslateGvaFlagValidateRead | whv.WHvTranslateGvaFlagPrivilegeExempt
 
-        Offset, GvaAligned = Gva & 0xfff, Gva & 0xfffffffffffff000
+        GvaAligned, Offset = utils.SplitAddress(Gva)
         ResultCode, Gpa = self.TranslateGva(
             VpIndex,
             GvaAligned,
