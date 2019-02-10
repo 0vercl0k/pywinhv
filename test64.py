@@ -16,6 +16,17 @@ class PackedPhysicalMemory(object):
         self.Gpa += 0x1000
         return Gpa
 
+# mov rax, Address ; mov rbx, Value ; mov [rax], rbx
+WriteMemory64 = lambda Address, Value: '\x48\xb8' + struct.pack('<Q', Address) + '\x48\xbb' + struct.pack('<Q', Value) + '\x48\x89\x18'
+# mov rax, Address ; mov rax, [rax]
+LoadRaxFromRax = lambda Address: '\x48\xb8' + struct.pack('<Q', Address) + '\x48\x8b\x00'
+# mov rax, gs:[0]
+LoadGsInRax = '\x65\x48\x8b\x04\x25\x00\x00\x00\x00'
+# inc rax
+IncRax = '\x48\xff\xc0'
+# int3
+Int3 = '\xcc'
+
 def main(argc, argv):
     HypervisorPresent = hv.IsHypervisorPresent()
     print 'HypervisorPresent:', HypervisorPresent
@@ -44,13 +55,16 @@ def main(argc, argv):
         # OK so we need to allocate memory for paging structures, and build the
         # virtual address space.
         CodeGva = 0x00007fffb8c05000
+        DataReadOnlyGva = 0x00007fffb8c06000
+        DataReadWriteGva = 0x00007fffb8c07000
         TebGva = 0x000008b307ae000
+        KernelPageGva = 0xfffff80178e05000
         Pages = [
-            0x00007fffb8c06000,
-            0x00007fffb8c07000,
-            0x00007ff746a40000,
-            TebGva,
-            CodeGva
+            (CodeGva, 'rx'),
+            (TebGva, 'rw'),
+            (DataReadOnlyGva, 'r'),
+            (DataReadWriteGva, 'rw'),
+            (KernelPageGva, 'r'),
         ]
 
         Pml4Gpa = hv.BuildVirtualAddressSpace(
@@ -120,7 +134,7 @@ def main(argc, argv):
             }
         )
 
-        for Gva in Pages:
+        for Gva, _ in Pages:
             ResultCode, Gpa = Partition.TranslateGva(
                 0,
                 Gva
@@ -136,10 +150,32 @@ def main(argc, argv):
             TebGva
         )
 
-        print ' Teb: Translated GVA:%x to HVA:%x' % (TebGva, TebHva)
+        print '          Teb: Translated GVA:%x to HVA:%x' % (TebGva, TebHva)
         TebValue = 0xAABB
         TebContent = struct.pack('<Q', TebValue)
         memmove(TebHva, TebContent, len(TebContent))
+
+        # Initialize the read only page.
+        DataReadOnlyHva = Partition.TranslateGvaToHva(
+            0,
+            DataReadOnlyGva
+        )
+
+        print ' DataReadOnly: Translated GVA:%x to HVA:%x' % (DataReadOnlyGva, DataReadOnlyHva)
+        DataReadOnlyValue = 0xAABB
+        DataReadOnlyContent = struct.pack('<Q', DataReadOnlyValue)
+        memmove(DataReadOnlyHva, DataReadOnlyContent, len(DataReadOnlyContent))
+
+        # Initialize the read only page.
+        DataReadWriteHva = Partition.TranslateGvaToHva(
+            0,
+            DataReadWriteGva
+        )
+
+        print 'DataReadWrite: Translated GVA:%x to HVA:%x' % (DataReadWriteGva, DataReadWriteHva)
+        DataReadWriteValue = 0xDEAD
+        DataReadWriteContent = struct.pack('<Q', DataReadWriteValue)
+        memmove(DataReadWriteHva, DataReadWriteContent, len(DataReadWriteContent))
 
         # Go write some code.
         CodeHva = Partition.TranslateGvaToHva(
@@ -147,15 +183,39 @@ def main(argc, argv):
             CodeGva
         )
 
-        print 'Code: Translated GVA:%x to HVA:%x' % (CodeGva, CodeHva)
+        print '         Code: Translated GVA:%x to HVA:%x' % (CodeGva, CodeHva)
         N = 137
-        # mov rax, gs:[0]
-        LoadGsInRax = '\x65\x48\x8b\x04\x25\x00\x00\x00\x00'
-        # inc rax
-        IncRax = '\x48\xff\xc0'
         # int3
-        Int3 = '\xcc'
-        Code = LoadGsInRax + (IncRax * N) + Int3 + IncRax + Int3
+        Code  = ''
+        # mov rax, DataReadWriteGva ; mov rbx, Value ; mov [rax], rbx
+        Code += WriteMemory64(DataReadWriteGva, TebValue)
+        # mov rax, DataReadWriteGva ; mov rax, [rax]
+        Code += LoadRaxFromRax(DataReadWriteGva)
+        ExpectedRip1 = CodeGva + len(Code)
+        # int3.
+        Code += Int3
+        # mov rax, DataReadOnlyGva ; mov rax, [rax]
+        Code += LoadRaxFromRax(DataReadOnlyGva)
+        ExpectedRip2 = CodeGva + len(Code)
+        # int3.
+        Code += Int3
+        # mov rax, gs:[0]
+        Code += LoadGsInRax
+        # inc rax ; ... ; inc rax
+        Code += IncRax * N
+        # Compute the expected @rip at the first vmexit before we add the rest of the
+        # code. This is used for testing everything is going as expected.
+        ExpectedRip3 = CodeGva + len(Code)
+        # int3. This is where the first vmexit we should get. We will skip over the
+        # instruction and continue.
+        Code += Int3
+        # inc rax
+        Code += IncRax
+        ExpectedRip4 = CodeGva + len(Code)
+        # int3. This is the second vmexit we should get.
+        Code += Int3
+        # mov rax, DataReadWriteGva
+
         memmove(CodeHva, Code, len(Code))
         Partition.SetRip(
             0,
@@ -175,10 +235,8 @@ def main(argc, argv):
             )
         )
 
-        ExpectedRax = N + TebValue
-        assert Rax == ExpectedRax, '@rax(%x) does not match the magic value.' % Rax
-        ExpectedRip = CodeGva + len(LoadGsInRax) + (N * len(IncRax))
-        assert Rip == ExpectedRip, '@rip(%x) does not match the end @rip.' % Rip
+        assert Rax == TebValue, '@rax(%x) does not match the magic value.' % Rax
+        assert Rip == ExpectedRip1, '@rip(%x) does not match the end @rip.' % Rip
         assert ExitReason.value == hv.WHvRunVpExitReasonException, 'An exception VMEXIT is expected when the int3 is triggered.'
         assert ExitContext.VpException.ExceptionType == hv.WHvX64ExceptionTypeBreakpointTrap, 'A breakpoint exception is expected.'
         VpContext = ExitContext.VpContext
@@ -187,7 +245,61 @@ def main(argc, argv):
         print 'Successfully caught the first int3 interruption, stepping over it..'
         Partition.SetRegisters(
             0, {
-                hv.Rip : ExpectedRip + 1
+                hv.Rip : ExpectedRip1 + 1
+            }
+        )
+
+        ExitContext = Partition.RunVp(0)
+        Partition.DumpRegisters(0)
+
+        ExitReason = hv.WHvExitReason(ExitContext.ExitReason)
+        print 'Partition exited with:', ExitReason
+
+        Rip, Rax = Partition.GetRegisters64(
+            0, (
+                hv.Rip,
+                hv.Rax
+            )
+        )
+
+        assert Rax == TebValue, '@rax(%x) does not match the magic value.' % Rax
+        assert Rip == ExpectedRip2, '@rip(%x) does not match the end @rip.' % Rip
+        assert ExitReason.value == hv.WHvRunVpExitReasonException, 'An exception VMEXIT is expected when the int3 is triggered.'
+        assert ExitContext.VpException.ExceptionType == hv.WHvX64ExceptionTypeBreakpointTrap, 'A breakpoint exception is expected.'
+        VpContext = ExitContext.VpContext
+        assert VpContext.InstructionLength == len(Int3), 'The instruction length(%x) is supposed to be 1.' % VpContext.InstructionLength
+
+        print 'Successfully caught the second int3 interruption, stepping over it..'
+        Partition.SetRegisters(
+            0, {
+                hv.Rip : ExpectedRip2 + 1
+            }
+        )
+
+        ExitContext = Partition.RunVp(0)
+        Partition.DumpRegisters(0)
+
+        ExitReason = hv.WHvExitReason(ExitContext.ExitReason)
+        print 'Partition exited with:', ExitReason
+        hv.DumpExitContext(ExitContext)
+
+        Rip, Rax = Partition.GetRegisters64(
+            0, (
+                hv.Rip,
+                hv.Rax
+            )
+        )
+
+        ExpectedRax = N + TebValue
+        assert Rax == ExpectedRax, '@rax(%x) does not match the magic value.' % Rax
+        assert Rip == ExpectedRip3, '@rip(%x) does not match the end @rip.' % Rip
+        assert ExitReason.value == hv.WHvRunVpExitReasonException, 'An exception VMEXIT is expected when the int3 is triggered.'
+        assert ExitContext.VpException.ExceptionType == hv.WHvX64ExceptionTypeBreakpointTrap, 'A breakpoint exception is expected.'
+
+        print 'Successfully caught the third int3 interruption, stepping over it..'
+        Partition.SetRegisters(
+            0, {
+                hv.Rip : ExpectedRip3 + 1
             }
         )
 
@@ -207,8 +319,7 @@ def main(argc, argv):
 
         ExpectedRax += 1
         assert Rax == ExpectedRax, '@rax(%x) does not match the magic value.' % Rax
-        ExpectedRip += len(Int3) + len(IncRax)
-        assert Rip == ExpectedRip, '@rip(%x) does not match the end @rip.' % Rip
+        assert Rip == ExpectedRip4, '@rip(%x) does not match the end @rip.' % Rip
         assert ExitReason.value == hv.WHvRunVpExitReasonException, 'An exception VMEXIT is expected when the int3 is triggered.'
         assert ExitContext.VpException.ExceptionType == hv.WHvX64ExceptionTypeBreakpointTrap, 'A breakpoint exception is expected.'
 
@@ -218,6 +329,7 @@ def main(argc, argv):
         print 'Mapped2MPageCount:', hex(MemoryCounters.Mapped2MPageCount)
         print 'Mapped1GPageCount:', hex(MemoryCounters.Mapped1GPageCount)
 
+        # XXX: They don't look right?
         print 'VP Guest Event Counters:'
         GuestEvents = Partition.GetVpCounters(
             0,
