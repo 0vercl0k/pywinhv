@@ -118,7 +118,7 @@ class WHvPartition(object):
         )
 
         assert Success, ('WHvRunVirtualProcessor failed with %x.' % Ret)
-        return ExitContext
+        return ExitContext, hvplat.WHvExitReason(ExitContext.ExitReason)
 
     def SetRegisters(self, VpIndex, Registers):
         '''Set registers in a VP.'''
@@ -165,6 +165,13 @@ class WHvPartition(object):
             VpIndex,
             (Register, )
         )[0]
+
+    def GetRegister64(self, VpIndex, Register):
+        '''Get a VP register.'''
+        return self.GetRegister(
+            VpIndex,
+            Register,
+        ).Reg64
 
     def GetRip(self, VpIndex):
         '''Get the @rip register of a VP.'''
