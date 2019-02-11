@@ -177,6 +177,40 @@ class UserCode(unittest.TestCase):
             'The ExceptionParamter(%x) should be the GVA of the read-only page.' % VpException.ExceptionParameter
         )
 
+    def test_execute_readonly(self):
+        '''Execute read-only memory.'''
+        Hva = self.Partition.TranslateGvaToHva(
+            0,
+            self.ReadOnlyGva
+        )
+
+        Content = IncRax + Int3
+        memmove(Hva, Content, len(Content))
+
+        self.Partition.SetRip(
+            0,
+            self.ReadOnlyGva
+        )
+
+        ExitContext, _ = self.Partition.RunVp(0)
+        VpException = ExitContext.VpException
+        hv.DumpExitContext(ExitContext)
+
+        self.assertEqual(
+            VpException.ExceptionType, hv.WHvX64ExceptionTypePageFault,
+            'A PageFault exception(%x) is expected.' % VpException.ExceptionType
+        )
+
+        self.assertEqual(
+            VpException.ErrorCode, 0x15, # XXX: Figure out the ErrorCode meaning.
+            'The ErrorCode(%x) is expecting to show an execute-access.' % VpException.ErrorCode,
+        )
+
+        self.assertEqual(
+            VpException.ExceptionParameter, self.ReadOnlyGva,
+            'The ExceptionParamter(%x) should be the GVA of the read-only page.' % VpException.ExceptionParameter
+        )
+
     def test_write_to_readonly(self):
         '''Write to read-only memory.'''
         Hva = self.Partition.TranslateGvaToHva(

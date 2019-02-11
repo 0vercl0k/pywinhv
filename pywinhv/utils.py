@@ -320,6 +320,7 @@ def BuildVirtualAddressSpace(Partition, PageGvas, Policy):
         TableEntry.AsUINT64 = 0
         TableEntry.Present = 1
         TableEntry.Write = 1
+        TableEntry.NoExecute = 0
         TableEntry.UserAccessible = IsUserAddress(Gva)
 
         # First, the PML4E to the PDPT.
@@ -339,6 +340,7 @@ def BuildVirtualAddressSpace(Partition, PageGvas, Policy):
 
         # Finally, the PTE to the Page.
         TableEntry.Write = 'w' in Access
+        TableEntry.NoExecute = 'x' not in Access
         TableEntry.PageFrameNumber = GetPfnFromGpa(GvaGpa)
         Pt = (SIZE_T * 512).from_address(PtHva)
         Pt[PtIdx] = TableEntry.AsUINT64
