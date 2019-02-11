@@ -194,7 +194,6 @@ class UserCode(unittest.TestCase):
 
         ExitContext, _ = self.Partition.RunVp(0)
         VpException = ExitContext.VpException
-        hv.DumpExitContext(ExitContext)
 
         self.assertEqual(
             VpException.ExceptionType, hv.WHvX64ExceptionTypePageFault,
