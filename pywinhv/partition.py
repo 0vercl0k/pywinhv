@@ -370,6 +370,32 @@ class WHvPartition(object):
 
         return Result
 
+    def Save(self):
+        '''Save a snapshot of the virtual processors registers as well as the physical
+        memory space. It can be restored with Restore.'''
+        Snapshot = {
+            'VP' : [],
+            'Mem' : []
+        }
+
+        for VpIndex in range(self.ProcessorCount):
+            Registers = self.GetRegisters(
+                VpIndex,
+                hvplat.AllRegisters
+            )
+
+            Snapshot['VP'].append((VpIndex, Registers))
+        return Snapshot
+
+    def Restore(self, Snapshot):
+        '''Restore a snapshot into the partition.'''
+        for VpIndex, Registers in Snapshot['VP']:
+            self.SetRegisters(
+                VpIndex,
+                # XXX: Something cleaner maybe?
+                dict(zip(hvplat.AllRegisters, Registers))
+            )
+
 def main(argc, argv):
     return 0
 

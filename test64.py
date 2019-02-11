@@ -144,16 +144,11 @@ class UserCode(unittest.TestCase):
             cls.CodeGva
         )
 
-        # cls.SavedState = cls.Partition.Save(0)
+        cls.Snapshot = cls.Partition.Save()
 
     def setUp(self):
         '''Restore the context everytime before executing a test.'''
-        self.Partition.SetRegisters(
-            0, {
-                hv.Rax : 0
-            }
-        )
-        # XXX: Save / restore
+        self.Partition.Restore(self.Snapshot)
 
     def test_read_from_supervisor(self):
         '''Read from supervisor memory.'''
@@ -417,6 +412,41 @@ class UserCode(unittest.TestCase):
         '''Check the processor performance counters.'''
         # XXX: They don't look right?
         pass
+
+    def test_save_restore_registers(self):
+        '''Take a snapshot modify registers and restore it.'''
+        self.Partition.SetRegisters(
+            0, {
+                hv.Rax : 0xdeadbeefbaadc0de,
+                hv.Rbx : 0xdeadbeefbaadc0de,
+                hv.Rcx : 0xdeadbeefbaadc0de,
+                hv.Rip : 0xdeadbeefbaadc0de,
+                hv.Rsp : 0xdeadbeefbaadc0de
+            }
+        )
+
+        Snapshot = self.Partition.Save()
+        InitRax = self.Partition.GetRegister64(
+            0,
+            hv.Rax
+        )
+
+        self.Partition.SetRegisters(
+            0, {
+                hv.Rax : 0xaaaaaaaaaaaaaaaa
+            }
+        )
+
+        self.Partition.Restore(Snapshot)
+        Rax = self.Partition.GetRegister64(
+            0,
+            hv.Rax
+        )
+
+        self.assertEqual(
+            Rax, InitRax,
+            '@rax(%x) does not match the value it had before the snapshot.' % Rax
+        )
 
 def main(argc, argv):
     HypervisorPresent = hv.IsHypervisorPresent()
