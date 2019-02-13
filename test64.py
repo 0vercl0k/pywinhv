@@ -118,6 +118,13 @@ def CreatePartition(Pages, TebGva = 0):
     print 'Partition created:', Partition
     return Partition
 
+# https://wiki.osdev.org/Exceptions#Page_Fault
+PF_ERRCODE_PRESENT = 1 << 0
+PF_ERRCODE_WRITE = 1 << 1
+PF_ERRCODE_USER = 1 << 2
+PF_ERRCODE_RESERVED_WRITE = 1 << 3
+PF_ERRCODE_IFETCH = 1 << 4
+
 class UserCode(unittest.TestCase):
     '''Test everything related to running long mode code.'''
     @classmethod
@@ -168,7 +175,8 @@ class UserCode(unittest.TestCase):
         )
 
         self.assertEqual(
-            VpException.ErrorCode, 5, # XXX: Figure out the ErrorCode meaning.
+            VpException.ErrorCode,
+            PF_ERRCODE_PRESENT | PF_ERRCODE_USER,
             'The ErrorCode(%x) is expecting to show a write-access.' % VpException.ErrorCode,
         )
 
@@ -201,7 +209,8 @@ class UserCode(unittest.TestCase):
         )
 
         self.assertEqual(
-            VpException.ErrorCode, 0x15, # XXX: Figure out the ErrorCode meaning.
+            VpException.ErrorCode,
+            PF_ERRCODE_PRESENT | PF_ERRCODE_USER | PF_ERRCODE_IFETCH,
             'The ErrorCode(%x) is expecting to show an execute-access.' % VpException.ErrorCode,
         )
 
@@ -236,7 +245,8 @@ class UserCode(unittest.TestCase):
         )
 
         self.assertEqual(
-            VpException.ErrorCode, 7, # XXX: Figure out the ErrorCode meaning.
+            VpException.ErrorCode,
+            PF_ERRCODE_PRESENT | PF_ERRCODE_USER | PF_ERRCODE_WRITE,
             'The ErrorCode(%x) is expecting to show a write-access.' % VpException.ErrorCode,
         )
 
