@@ -242,12 +242,7 @@ AllRegisters = (
     Lstar,
     Cstar,
     Sfmask,
-
     TscAux,
-#    SpecCtrl,
-#    PredCmd,
-#    ApicId,
-#    ApicVersion,
     RegisterPendingInterruption,
     RegisterInterruptState,
     RegisterPendingEvent,

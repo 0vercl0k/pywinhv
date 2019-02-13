@@ -378,6 +378,7 @@ class WHvPartition(object):
             'Mem' : []
         }
 
+        # XXX: SpecCtrl & cie, ensure they are available in the VP.
         for VpIndex in range(self.ProcessorCount):
             Registers = self.GetRegisters(
                 VpIndex,
