@@ -157,6 +157,36 @@ class UserCode(unittest.TestCase):
         '''Restore the context everytime before executing a test.'''
         self.Partition.Restore(self.Snapshot)
 
+    def test_read_from_nonpresent(self):
+        '''Read from a non-present page.'''
+        # XXX: Change this to 0xdeadbeefbaadc0de and debug why others tests fail.
+        NonPresentGva = 1337
+        Code = ReadMemory64(NonPresentGva)
+        memmove(self.CodeHva, Code, len(Code))
+        self.Partition.SetRip(
+            0,
+            self.CodeGva
+        )
+
+        ExitContext, _ = self.Partition.RunVp(0)
+        VpException = ExitContext.VpException
+
+        self.assertEqual(
+            VpException.ExceptionType, hv.WHvX64ExceptionTypePageFault,
+            'A PageFault exception(%x) is expected.' % VpException.ExceptionType
+        )
+
+        self.assertEqual(
+            VpException.ErrorCode,
+            PF_ERRCODE_USER,
+            'The ErrorCode(%x) is expecting to show a read-access from non present GVA.' % VpException.ErrorCode,
+        )
+
+        self.assertEqual(
+            VpException.ExceptionParameter, NonPresentGva,
+            'The ExceptionParamter(%x) should be the GVA of the non-present page.' % VpException.ExceptionParameter
+        )
+
     def test_read_from_supervisor(self):
         '''Read from supervisor memory.'''
         Code = ReadMemory64(self.KernelPageGva) + Int3
