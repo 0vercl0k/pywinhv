@@ -64,6 +64,7 @@ class WHvPartition(object):
         # Set-up the ExceptionExitBitmap.
         Property.ExceptionExitBitmap  = 1 << whv.WHvX64ExceptionTypeBreakpointTrap
         Property.ExceptionExitBitmap |= 1 << whv.WHvX64ExceptionTypePageFault
+        Property.ExceptionExitBitmap |= 1 << whv.WHvX64ExceptionTypeGeneralProtectionFault
         Success, Ret = hvplat.WHvSetPartitionProperty(
             self.Partition,
             whv.WHvPartitionPropertyCodeExceptionExitBitmap,

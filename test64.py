@@ -171,20 +171,16 @@ class UserCode(unittest.TestCase):
         VpException = ExitContext.VpException
 
         self.assertEqual(
-            VpException.ExceptionType, hv.WHvX64ExceptionTypePageFault,
-            'A PageFault exception(%x) is expected.' % VpException.ExceptionType
+            VpException.ExceptionType, hv.WHvX64ExceptionTypeGeneralProtectionFault,
+            'A GeneralProtection exception(%x) is expected.' % VpException.ExceptionType
         )
 
         self.assertEqual(
+            # Error code: The General Protection Fault sets an error code,
+            # which is the segment selector index when the exception is segment related.
+            # Otherwise, 0.
             VpException.ErrorCode, 0,
-            # XXX: Figure out the meaning of ErrorCode(0) / ExceptionParameter(0xd0)
-            'The ErrorCode(%x) is expecting to show a read-access from non canonical GVA.' % VpException.ErrorCode,
-        )
-
-        self.assertEqual(
-            # XXX: Figure out the meaning of ErrorCode(0) / ExceptionParameter(0xd0)
-            VpException.ExceptionParameter, 0xd0,
-            'The ExceptionParamter(%x) should be the GVA of the non-present page.' % VpException.ExceptionParameter
+            'The ErrorCode(%x) is expected to be 0.' % VpException.ErrorCode,
         )
 
     def test_read_from_nonpresent(self):
@@ -213,7 +209,7 @@ class UserCode(unittest.TestCase):
 
         self.assertEqual(
             VpException.ExceptionParameter, NonPresentGva,
-            'The ExceptionParamter(%x) should be the GVA of the non-present page.' % VpException.ExceptionParameter
+            'The ExceptionParameter(%x) should be the GVA of the non-present page.' % VpException.ExceptionParameter
         )
 
     def test_read_from_supervisor(self):
@@ -241,7 +237,7 @@ class UserCode(unittest.TestCase):
 
         self.assertEqual(
             VpException.ExceptionParameter, self.KernelPageGva,
-            'The ExceptionParamter(%x) should be the GVA of the read-only page.' % VpException.ExceptionParameter
+            'The ExceptionParameter(%x) should be the GVA of the read-only page.' % VpException.ExceptionParameter
         )
 
     def test_execute_readonly(self):
@@ -275,7 +271,7 @@ class UserCode(unittest.TestCase):
 
         self.assertEqual(
             VpException.ExceptionParameter, self.ReadOnlyGva,
-            'The ExceptionParamter(%x) should be the GVA of the read-only page.' % VpException.ExceptionParameter
+            'The ExceptionParameter(%x) should be the GVA of the read-only page.' % VpException.ExceptionParameter
         )
 
     def test_write_to_readonly(self):
@@ -311,7 +307,7 @@ class UserCode(unittest.TestCase):
 
         self.assertEqual(
             VpException.ExceptionParameter, self.ReadOnlyGva,
-            'The ExceptionParamter(%x) should be the GVA of the read-only page.' % VpException.ExceptionParameter
+            'The ExceptionParameter(%x) should be the GVA of the read-only page.' % VpException.ExceptionParameter
         )
 
     def test_read_from_readonly(self):
