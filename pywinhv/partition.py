@@ -387,6 +387,13 @@ class WHvPartition(object):
             )
 
             Snapshot['VP'].append((VpIndex, Registers))
+
+        for Gpa, Hva in self.TranslationTable.iteritems():
+            Page = ct.string_at(Hva, 0x1000)
+            Snapshot['Mem'].append((
+                Gpa, Hva, Page
+            ))
+
         return Snapshot
 
     def Restore(self, Snapshot):
@@ -397,6 +404,9 @@ class WHvPartition(object):
                 # XXX: Something cleaner maybe?
                 dict(zip(hvplat.AllRegisters, Registers))
             )
+
+        for Gpa, Hva, Page in Snapshot['Mem']:
+            ct.memmove(Hva, Page, 0x1000)
 
 def main(argc, argv):
     return 0

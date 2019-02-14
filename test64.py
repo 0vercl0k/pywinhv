@@ -546,6 +546,40 @@ class UserCode(unittest.TestCase):
             '@rax(%x) does not match the value it had before the snapshot.' % Rax
         )
 
+    def test_save_restore_memory(self):
+        '''Take a snapshot modify memory and resore it.'''
+        TebHva = self.Partition.TranslateGvaToHva(
+            0,
+            self.TebGva
+        )
+
+        TebContent = '\xaa' * 0x1000
+        memmove(TebHva, TebContent, len(TebContent))
+
+        Snapshot = self.Partition.Save()
+        TebContent = '\xbb' * 0x1000
+        memmove(TebHva, TebContent, len(TebContent))
+
+        self.Partition.Restore(Snapshot)
+
+        Code = ReadMemory64(self.TebGva) + Int3
+        memmove(self.CodeHva, Code, len(Code))
+        self.Partition.SetRip(
+            0,
+            self.CodeGva
+        )
+
+        self.Partition.RunVp(0)
+        Rax = self.Partition.GetRegister64(
+            0,
+            hv.Rax
+        )
+
+        self.assertEqual(
+            Rax, 0xaaaaaaaaaaaaaaaa,
+            '@rax(%x) is supposed to have the value restored by the snapshot.' % Rax
+        )
+
 def main(argc, argv):
     HypervisorPresent = hv.IsHypervisorPresent()
     print 'HypervisorPresent:', HypervisorPresent
