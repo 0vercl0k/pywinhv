@@ -278,8 +278,8 @@ def BuildVirtualAddressSpace(Partition, PageGvas, Policy):
 
         # Allocate backing memory host side.
         Hva, Gpa, _ = Partition.MapGpaRangeWithoutContent(
-            0x1000,
             Policy.GetGpa(),
+            0x1000,
             Flags
         )
 
@@ -290,8 +290,8 @@ def BuildVirtualAddressSpace(Partition, PageGvas, Policy):
 
     # We know we need a PML4 table, so allocate it now.
     Pml4Hva, Pml4Gpa, _ = Partition.MapGpaRangeWithoutContent(
-        0x1000,
         Policy.GetGpa(),
+        0x1000,
         'rw'
     )
 

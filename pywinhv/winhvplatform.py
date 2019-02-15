@@ -577,12 +577,12 @@ def WHvUnmapGpaRange(Partition, GuestAddress, SizeInBytes):
     partition. Any further access by a virtual processor to the range will result in a
     memory access exit.
     '''
-    assert (SourceAddress & 0xfff) == 0, 'SourceAddress(%x) needs to be page aligned.' % SourceAddress
+    assert (GuestAddress & 0xfff) == 0, 'SourceAddress(%x) needs to be page aligned.' % SourceAddress
     assert (SizeInBytes % 0x1000) == 0, 'SizeInBytes(%x) needs to be page aligned.' % SizeInBytes
 
     Ret = whv.WHvUnmapGpaRange(
         Partition,
-        whv.uint2pvoid(GuestAddress),
+        GuestAddress,
         SizeInBytes,
     )
 

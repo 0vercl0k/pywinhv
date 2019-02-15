@@ -640,6 +640,51 @@ class UserCode(unittest.TestCase):
             '@rax(%x) is supposed to have the value restored by the snapshot.' % Rax
         )
 
+    def test_save_restore_gpa_to_hva(self):
+        '''Ensure that the translation table is saved in a snapshot.'''
+        TranslationTable = self.Partition.GetTranslationTable()
+        Snapshot = self.Partition.Save()
+        PageGpa = 0x10000
+        Hva, Size = self.Partition.MapGpaRange(
+            PageGpa,
+            'hello',
+            'r'
+        )
+
+        self.assertEqual(
+            Size, 0x1000,
+            'The size(%x) is expected to be a page large.' % Size
+        )
+
+        self.assertEqual(
+            PageGpa in self.Partition.TranslationTable, True,
+            'The GPA(%x) is expected to be added to the translation table.' % PageGpa
+        )
+
+        self.assertEqual(
+            self.Partition.TranslationTable != TranslationTable,
+            True,
+            'The translation tables are expected to be different.'
+        )
+
+        self.Partition.Restore(Snapshot)
+
+        self.assertEqual(
+            PageGpa not in self.Partition.TranslationTable, True,
+            'The GPA(%x) is expected to not be in the translation table anymore.' % PageGpa
+        )
+
+        self.Partition.UnmapGpaRange(
+            PageGpa,
+            0x1000,
+            Hva
+        )
+
+        self.assertEqual(
+            self.Partition.TranslationTable, TranslationTable,
+            'The translation tables are expected to be different.'
+        )
+
 def main(argc, argv):
     HypervisorPresent = hv.IsHypervisorPresent()
     print 'HypervisorPresent:', HypervisorPresent

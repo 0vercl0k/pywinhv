@@ -4,11 +4,15 @@ import pywinhv as whv
 import ctypes as ct
 import utils
 import sys
-from ctypes.wintypes import LPVOID, DWORD, c_size_t as SIZE_T
+from ctypes.wintypes import BOOL, LPVOID, DWORD, c_size_t as SIZE_T
 
 ct.windll.kernel32.VirtualAlloc.argtypes = (LPVOID, SIZE_T, DWORD, DWORD)
 ct.windll.kernel32.VirtualAlloc.restype = LPVOID
 VirtualAlloc = ct.windll.kernel32.VirtualAlloc
+
+ct.windll.kernel32.VirtualFree.argtypes = (LPVOID, SIZE_T, DWORD)
+ct.windll.kernel32.VirtualFree.restype = BOOL
+VirtualFree = ct.windll.kernel32.VirtualFree
 
 MEM_COMMIT = 0x00001000
 MEM_RESERVE = 0x00002000
@@ -250,7 +254,7 @@ class WHvPartition(object):
             R[24].Reg64
         )
 
-    def MapGpaRangeWithoutContent(self, SizeInBytes, Gpa, Flags):
+    def MapGpaRangeWithoutContent(self, Gpa, SizeInBytes, Flags):
         '''Map a GPA range in the partition. This takes care of allocating
         memory in the host and mapping it in the guest.'''
         SizeInBytes = utils.Align2Page(SizeInBytes)
@@ -279,11 +283,11 @@ class WHvPartition(object):
         self.TranslationTable[Gpa] = Hva
         return (Hva, Gpa, SizeInBytes)
 
-    def MapGpaRange(self, Buffer, Gpa, Flags):
+    def MapGpaRange(self, Gpa, Buffer, Flags):
         '''Map a GPA range in the partition and initialize it with content.'''
         Hva, _, SizeInBytes = self.MapGpaRangeWithoutContent(
-            len(Buffer),
             Gpa,
+            len(Buffer),
             Flags
         )
 
@@ -298,12 +302,31 @@ class WHvPartition(object):
             Flags += 'w'
 
         Hva, CodeLength = self.MapGpaRange(
-            Code,
             Gpa,
+            Code,
             'rx'
         )
 
         return (Hva, CodeLength)
+
+    def UnmapGpaRange(self, Gpa, SizeInBytes, Hva = None):
+        '''Unmap a GPA range and release the backing host memory page if provided.'''
+        hvplat.WHvUnmapGpaRange(
+            self.Partition,
+            Gpa,
+            SizeInBytes
+        )
+
+        if Hva is None:
+            return
+
+        Success = VirtualFree(
+            Hva,
+            SizeInBytes,
+            0
+        ) == 0
+
+        assert Success, 'VirtualFree failed.'
 
     def TranslateGva(self, VpIndex, Gva, Flags = None):
         '''Translate a GVA into a GPA.'''
@@ -420,7 +443,8 @@ class WHvPartition(object):
         memory space. It can be restored with Restore.'''
         Snapshot = {
             'VP' : [],
-            'Mem' : []
+            'Mem' : [],
+            'Translation' : None
         }
 
         # XXX: SpecCtrl & cie, ensure they are available in the VP.
@@ -438,7 +462,7 @@ class WHvPartition(object):
                 Gpa, Hva, Page
             ))
 
-        # XXX: Sqve / restore the translation table?
+        Snapshot['TranslationTable'] = self.GetTranslationTable()
         return Snapshot
 
     def Restore(self, Snapshot):
@@ -452,6 +476,12 @@ class WHvPartition(object):
 
         for Gpa, Hva, Page in Snapshot['Mem']:
             ct.memmove(Hva, Page, 0x1000)
+
+        self.TranslationTable = Snapshot['TranslationTable']
+
+    def GetTranslationTable(self):
+        '''Return a copy of the translation table.'''
+        return dict(self.TranslationTable)
 
 def main(argc, argv):
     return 0
