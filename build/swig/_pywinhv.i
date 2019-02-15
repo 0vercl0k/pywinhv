@@ -84,6 +84,7 @@
 %include carrays.i
 %array_class(WHV_REGISTER_NAME, WHV_REGISTER_NAME_ARRAY)
 %array_class(WHV_REGISTER_VALUE, WHV_REGISTER_VALUE_ARRAY)
+%array_class(UINT64, UINT64_ARRAY)
 
 // Expose a method to convert PVOID into a uintptr_t integer (useful for WHvMapGpaRange for example).
 %pointer_cast(unsigned long long, void*, uint2pvoid);

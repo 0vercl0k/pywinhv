@@ -28,9 +28,8 @@ class PackedPhysicalMemory(object):
         self.Gpa += 0x1000
         return Gpa
 
-def CreatePartition(Pages, TebGva = 0):
+def CreatePartition(Pages, PackedSpacePolicy, TebGva):
     '''Create a partition and configure it like a Windows 64bit environment.'''
-    PackedSpacePolicy = PackedPhysicalMemory()
     PartitionOptions = {
        'ProcessorCount' : 1,
        'Name' : '64b user'
@@ -145,7 +144,8 @@ class UserCode(unittest.TestCase):
             (cls.KernelPageGva, 'rwx'),
         ]
 
-        cls.Partition = CreatePartition(cls.Pages, cls.TebGva)
+        cls.Policy = PackedPhysicalMemory()
+        cls.Partition = CreatePartition(cls.Pages, cls.Policy, cls.TebGva)
         cls.CodeHva = cls.Partition.TranslateGvaToHva(
             0,
             cls.CodeGva
@@ -156,6 +156,66 @@ class UserCode(unittest.TestCase):
     def setUp(self):
         '''Restore the context everytime before executing a test.'''
         self.Partition.Restore(self.Snapshot)
+
+    def test_clear_dirty_pages(self):
+        '''Clear the dirty bits of the pages.'''
+        Code = WriteMemory64(self.TebGva, 1) + Int3
+        memmove(self.CodeHva, Code, len(Code))
+        self.Partition.SetRip(
+            0,
+            self.CodeGva
+        )
+
+        self.Partition.RunVp(0)
+
+        DirtyGpas = self.Partition.QueryGpaRangeDirtyPages(
+            0,
+            len(self.Partition.TranslationTable) * 0x1000
+        )
+
+        TranslationResult, TebGpa = self.Partition.TranslateGva(
+            0,
+            self.TebGva
+        )
+
+        self.assertEqual(
+            TranslationResult.value,
+            hv.WHvTranslateGvaResultSuccess,
+            'The TEB GVA->GPA translation result (%s) must be a success.' % TranslationResult
+        )
+
+        self.assertEqual(
+            TebGpa in DirtyGpas, True,
+            'The TEB GPA should be dirty.'
+        )
+
+        self.Partition.ClearGpaRangeDirtyBitmap(
+            0,
+            len(self.Partition.TranslationTable) * 0x1000
+        )
+
+        Bits = self.Partition.QueryGpaRangeDirtyBitmap(
+            0,
+            len(self.Partition.TranslationTable) * 0x1000
+        )
+
+        for Bit in Bits:
+            self.assertEqual(
+                Bit, 0,
+                'Bit(%x) is expected to be cleared.' % Bit
+            )
+
+    def test_number_dirty_pages(self):
+        '''Count the number of bits returned for dirty pages.'''
+        Bits = self.Partition.QueryGpaRangeDirtyBitmap(
+            0,
+            len(self.Partition.TranslationTable) * 0x1000
+        )
+
+        self.assertEqual(
+            len(Bits), len(self.Partition.TranslationTable),
+            'The number of bits(%x) has to match the number of physical pages.' % len(Bits)
+        )
 
     def test_read_from_noncanonical(self):
         '''Read from a non canonical page.'''

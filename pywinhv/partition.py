@@ -35,6 +35,7 @@ class WHvPartition(object):
         self.ProcessorCount = kwargs.get('ProcessorCount', 1)
         self.Name = kwargs.get('Name', 'DefaultName')
         self.ExceptionExitBitmap = kwargs.get('ExceptionExitBitmap', 0)
+        # XXX: OrderedDict might be better?
         self.TranslationTable = {}
 
         # Create the partition.
@@ -262,6 +263,10 @@ class WHvPartition(object):
 
         assert Hva is not None, 'VirtualAlloc failed.'
 
+        if 'd' not in Flags:
+            # Force the 'd' dirty flag that is used for save/restore.
+            Flags += 'd'
+
         Success, Ret = hvplat.WHvMapGpaRange(
             self.Partition,
             Hva,
@@ -371,6 +376,45 @@ class WHvPartition(object):
 
         return Result
 
+    def QueryGpaRangeDirtyBitmap(self, Gpa, RangeSize):
+        '''Get a list of bits describing which physical guest page is dirty. One bit per
+        page.'''
+        Success, Bits, Ret = hvplat.WHvQueryGpaRangeDirtyBitmap(
+            self.Partition,
+            Gpa,
+            RangeSize
+        )
+
+        assert Success, 'WHvQueryGpaRangeDirtyBitmap failed with: %x.' % Ret
+        return Bits
+
+    def ClearGpaRangeDirtyBitmap(self, Gpa, RangeSize):
+        '''Clear the dirty bits on a GPA range.'''
+        Success, _, Ret = hvplat.WHvQueryGpaRangeDirtyBitmap(
+            self.Partition,
+            Gpa,
+            RangeSize,
+            True
+        )
+
+        assert Success, 'WHvQueryGpaRangeDirtyBitmap failed with: %x.' % Ret
+
+    def QueryGpaRangeDirtyPages(self, Gpa, RangeSize):
+        '''Get a list of the dirty GPAs.'''
+        Bits = self.QueryGpaRangeDirtyBitmap(
+            Gpa,
+            RangeSize
+        )
+
+        DirtyPages = []
+        CurGpa = Gpa
+        for Bit in Bits:
+            if Bit:
+                DirtyPages.append(CurGpa)
+            CurGpa += 0x1000
+
+        return DirtyPages
+
     def Save(self):
         '''Save a snapshot of the virtual processors registers as well as the physical
         memory space. It can be restored with Restore.'''
@@ -394,6 +438,7 @@ class WHvPartition(object):
                 Gpa, Hva, Page
             ))
 
+        # XXX: Sqve / restore the translation table?
         return Snapshot
 
     def Restore(self, Snapshot):

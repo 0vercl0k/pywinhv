@@ -589,6 +589,54 @@ def WHvUnmapGpaRange(Partition, GuestAddress, SizeInBytes):
     Success = Ret == 0
     return (Success, Ret & 0xffffffff)
 
+def WHvQueryGpaRangeDirtyBitmap(Partition, GuestAddress, RangeSizeInBytes, Clear = False):
+    '''
+    HRESULT
+    WINAPI
+    WHvQueryGpaRangeDirtyBitmap(
+        _In_ WHV_PARTITION_HANDLE Partition,
+        _In_ WHV_GUEST_PHYSICAL_ADDRESS GuestAddress,
+        _In_ UINT64 RangeSizeInBytes,
+        _Out_writes_bytes_opt_(BitmapSizeInBytes) UINT64* Bitmap,
+        _In_ UINT32 BitmapSizeInBytes
+        );
+    '''
+    assert (GuestAddress & 0xfff) == 0, 'GuestAddress(%x) needs to be page aligned.' % GuestAddress
+    assert (RangeSizeInBytes & 0xfff) == 0, 'RangeSizeInBytes(%x) needs to be page aligned.' % RangeSizeInBytes
+
+    # One bit per page.
+    NumberPages = (RangeSizeInBytes + 1) / 0x1000
+    NumberU64 = NumberPages / 64
+    if NumberU64 == 0:
+        NumberU64 = 1
+
+    if Clear:
+        NumberU64 = 0
+
+    BitmapSizeInBytes = NumberU64 * 8
+    Bitmap = whv.UINT64_ARRAY(NumberU64)
+    Ret = whv.WHvQueryGpaRangeDirtyBitmap(
+        Partition,
+        GuestAddress,
+        RangeSizeInBytes,
+        Bitmap.cast(),
+        BitmapSizeInBytes
+    )
+
+    Success = Ret == 0
+    DirtyBits = []
+    if Success:
+        for Idx in range(NumberU64):
+            CurBitmap = Bitmap[Idx]
+            NumberBits = 64
+            if (Idx + 1) == NumberU64:
+                NumberBits = NumberPages - len(DirtyBits)
+
+            for BitIdx in range(NumberBits):
+                DirtyBits.append((CurBitmap >> BitIdx) & 1)
+
+    return (Success, DirtyBits, Ret & 0xffffffff)
+
 def WHvTranslateGva(Partition, VpIndex, Gva, TranslateFlags):
     '''
     HRESULT
