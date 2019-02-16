@@ -45,13 +45,13 @@ class WHvPartition(object):
         # Create the partition.
         Success, Partition, Ret = hvplat.WHvCreatePartition()
         assert Success, 'WHvCreatePartition failed in context manager with %x.' % Ret
-        self.Partition = Partition
+        self.Handle = Partition
 
         # Set-up the partition with a number of VPs.
         Property = whv.WHV_PARTITION_PROPERTY()
         Property.ProcessorCount = self.ProcessorCount
         Success, Ret = hvplat.WHvSetPartitionProperty(
-            self.Partition,
+            self.Handle,
             whv.WHvPartitionPropertyCodeProcessorCount,
             Property
         )
@@ -60,7 +60,7 @@ class WHvPartition(object):
         # Set-up Exception exits.
         Property.ExtendedVmExits.ExceptionExit = 1
         Success, Ret = hvplat.WHvSetPartitionProperty(
-            self.Partition,
+            self.Handle,
             whv.WHvPartitionPropertyCodeExtendedVmExits,
             Property
         )
@@ -71,20 +71,20 @@ class WHvPartition(object):
         Property.ExceptionExitBitmap |= 1 << whv.WHvX64ExceptionTypePageFault
         Property.ExceptionExitBitmap |= 1 << whv.WHvX64ExceptionTypeGeneralProtectionFault
         Success, Ret = hvplat.WHvSetPartitionProperty(
-            self.Partition,
+            self.Handle,
             whv.WHvPartitionPropertyCodeExceptionExitBitmap,
             Property
         )
         assert Success, 'WHvSetPartitionProperty(ExceptionExitBitmap) failed in context manager with %x.' % Ret
 
         # Activate the partition.
-        Success, Ret = hvplat.WHvSetupPartition(self.Partition)
+        Success, Ret = hvplat.WHvSetupPartition(self.Handle)
         assert Success, 'WHvSetupPartition failed in context manager with %x.' % Ret
 
         # Create the virtual processors.
         for VpIndex in range(self.ProcessorCount):
             Success, Ret = hvplat.WHvCreateVirtualProcessor(
-                self.Partition,
+                self.Handle,
                 VpIndex
             )
             assert Success, 'WHvCreateVirtualProcessor(%d) failed in context manager with %x.' % (VpIndex, Ret)
@@ -98,13 +98,13 @@ class WHvPartition(object):
         # Release the VPs.
         for VpIndex in range(self.ProcessorCount):
             Success, Ret = hvplat.WHvDeleteVirtualProcessor(
-                self.Partition,
+                self.Handle,
                 VpIndex
             )
             assert Success, 'WHvDeleteVirtualProcessor failed in context manager with %x.' % Ret
 
         # Release the Partition.
-        Success, Ret = hvplat.WHvDeletePartition(self.Partition)
+        Success, Ret = hvplat.WHvDeletePartition(self.Handle)
         assert Success, 'WHvDeletePartition failed in context manager with %x.' % Ret
 
         # Forward the exception is we've intercepted one, otherwise s'all good.
@@ -120,7 +120,7 @@ class WHvPartition(object):
     def RunVp(self, VpIndex):
         '''Run the virtual processor.'''
         Success, ExitContext, Ret = hvplat.WHvRunVirtualProcessor(
-            self.Partition, VpIndex
+            self.Handle, VpIndex
         )
 
         assert Success, ('WHvRunVirtualProcessor failed with %x.' % Ret)
@@ -129,7 +129,7 @@ class WHvPartition(object):
     def SetRegisters(self, VpIndex, Registers):
         '''Set registers in a VP.'''
         Success, Ret = hvplat.WHvSetVirtualProcessorRegisters(
-            self.Partition,
+            self.Handle,
             VpIndex,
             Registers
         )
@@ -147,7 +147,7 @@ class WHvPartition(object):
     def GetRegisters(self, VpIndex, Registers, Reg64 = False):
         '''Get registers of a VP.'''
         Success, Registers, Ret = hvplat.WHvGetVirtualProcessorRegisters(
-            self.Partition,
+            self.Handle,
             VpIndex,
             Registers
         )
@@ -272,7 +272,7 @@ class WHvPartition(object):
             Flags += 'd'
 
         Success, Ret = hvplat.WHvMapGpaRange(
-            self.Partition,
+            self.Handle,
             Hva,
             Gpa,
             SizeInBytes,
@@ -312,7 +312,7 @@ class WHvPartition(object):
     def UnmapGpaRange(self, Gpa, SizeInBytes, Hva = None):
         '''Unmap a GPA range and release the backing host memory page if provided.'''
         hvplat.WHvUnmapGpaRange(
-            self.Partition,
+            self.Handle,
             Gpa,
             SizeInBytes
         )
@@ -334,7 +334,7 @@ class WHvPartition(object):
             Flags = whv.WHvTranslateGvaFlagValidateRead | whv.WHvTranslateGvaFlagPrivilegeExempt
 
         Success, ResultCode, Gpa, Ret = hvplat.WHvTranslateGva(
-            self.Partition,
+            self.Handle,
             VpIndex,
             Gva,
             Flags
@@ -371,7 +371,7 @@ class WHvPartition(object):
     def GetPartitionCounters(self, Counter):
         '''Get a partition performance counter.'''
         Success, Counters, Ret = hvplat.WHvGetPartitionCounters(
-            self.Partition,
+            self.Handle,
             Counter
         )
 
@@ -381,7 +381,7 @@ class WHvPartition(object):
     def GetVpCounters(self, VpIndex, Counter):
         '''Get a virtual processor performance counter.'''
         Success, Counters, Ret = hvplat.WHvGetVirtualProcessorCounters(
-            self.Partition,
+            self.Handle,
             VpIndex,
             Counter
         )
@@ -403,7 +403,7 @@ class WHvPartition(object):
         '''Get a list of bits describing which physical guest page is dirty. One bit per
         page.'''
         Success, Bits, Ret = hvplat.WHvQueryGpaRangeDirtyBitmap(
-            self.Partition,
+            self.Handle,
             Gpa,
             RangeSize
         )
@@ -414,7 +414,7 @@ class WHvPartition(object):
     def ClearGpaRangeDirtyPages(self, Gpa, RangeSize):
         '''Clear the dirty bits on a GPA range.'''
         Success, _, Ret = hvplat.WHvQueryGpaRangeDirtyBitmap(
-            self.Partition,
+            self.Handle,
             Gpa,
             RangeSize,
             True
@@ -445,8 +445,8 @@ class WHvPartition(object):
 
         return DirtyPages
 
-    def QueryGpaDirtyPage(self, Gpa):
-        '''Get if the GPA page is dirty or not.'''
+    def IsGpaDirty(self, Gpa):
+        '''Is the GPA page dirty or not?'''
         return self.QueryGpaRangeDirtyBitmap(
             Gpa,
             0x1000

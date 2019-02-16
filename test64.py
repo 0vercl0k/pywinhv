@@ -700,10 +700,10 @@ class UserCode(unittest.TestCase):
             'The TEB GVA->GPA translation result(%s) must be a success.' % TranslationResult
         )
 
-        Dirty = self.Partition.QueryGpaDirtyPage(TebGpa)
+        Dirty = self.Partition.IsGpaDirty(TebGpa)
 
         self.assertEqual(
-            Dirty, 0,
+            Dirty, False,
             'The TEB page is expected to be clean.'
         )
 
@@ -718,10 +718,10 @@ class UserCode(unittest.TestCase):
         self.Partition.RunVp(0)
 
         # Ensure the page is dirty.
-        Dirty = self.Partition.QueryGpaDirtyPage(TebGpa)
+        Dirty = self.Partition.IsGpaDirty(TebGpa)
 
         self.assertEqual(
-            Dirty, 1,
+            Dirty, True,
             'The TEB page is expected to be dirty.'
         )
 
@@ -729,10 +729,10 @@ class UserCode(unittest.TestCase):
         Snapshot = self.Partition.Save()
 
         # Make sure the page is clean again.
-        Dirty = self.Partition.QueryGpaDirtyPage(TebGpa)
+        Dirty = self.Partition.IsGpaDirty(TebGpa)
 
         self.assertEqual(
-            Dirty, 0,
+            Dirty, False,
             'The TEB page is expected to be clean after snapshot.'
         )
 
@@ -747,10 +747,10 @@ class UserCode(unittest.TestCase):
         self.Partition.RunVp(0)
 
         # Ensure the page is dirty.
-        Dirty = self.Partition.QueryGpaDirtyPage(TebGpa)
+        Dirty = self.Partition.IsGpaDirty(TebGpa)
 
         self.assertEqual(
-            Dirty, 1,
+            Dirty, True,
             'The TEB page is expected to be dirty.'
         )
 
@@ -758,10 +758,10 @@ class UserCode(unittest.TestCase):
         self.Partition.Restore(Snapshot)
 
         # Ensure the page is back clear again.
-        Dirty = self.Partition.QueryGpaDirtyPage(TebGpa)
+        Dirty = self.Partition.IsGpaDirty(TebGpa)
 
         self.assertEqual(
-            Dirty, 0,
+            Dirty, False,
             'The TEB page is expected to be clean after restore.'
         )
 
