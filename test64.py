@@ -189,7 +189,7 @@ class UserCode(unittest.TestCase):
             'The TEB GPA should be dirty.'
         )
 
-        self.Partition.ClearGpaRangeDirtyBitmap(
+        self.Partition.ClearGpaRangeDirtyPages(
             0,
             len(self.Partition.TranslationTable) * 0x1000
         )
@@ -683,6 +683,86 @@ class UserCode(unittest.TestCase):
         self.assertEqual(
             self.Partition.TranslationTable, TranslationTable,
             'The translation tables are expected to be different.'
+        )
+
+    def test_save_restore_dirty_pages(self):
+        '''Ensure that a dirty page is turned non dirty after a snapshot. Also ensure
+        that on restore it keeps non dirty.'''
+        # Let's make sure the TEB page is clean.
+        TranslationResult, TebGpa = self.Partition.TranslateGva(
+            0,
+            self.TebGva
+        )
+
+        self.assertEqual(
+            TranslationResult.value,
+            hv.WHvTranslateGvaResultSuccess,
+            'The TEB GVA->GPA translation result(%s) must be a success.' % TranslationResult
+        )
+
+        Dirty = self.Partition.QueryGpaDirtyPage(TebGpa)
+
+        self.assertEqual(
+            Dirty, 0,
+            'The TEB page is expected to be clean.'
+        )
+
+        # Dirty the TEB page.
+        Code = WriteMemory64(self.TebGva, 1) + Int3
+        memmove(self.CodeHva, Code, len(Code))
+        self.Partition.SetRip(
+            0,
+            self.CodeGva
+        )
+
+        self.Partition.RunVp(0)
+
+        # Ensure the page is dirty.
+        Dirty = self.Partition.QueryGpaDirtyPage(TebGpa)
+
+        self.assertEqual(
+            Dirty, 1,
+            'The TEB page is expected to be dirty.'
+        )
+
+        # Grab a snapshot.
+        Snapshot = self.Partition.Save()
+
+        # Make sure the page is clean again.
+        Dirty = self.Partition.QueryGpaDirtyPage(TebGpa)
+
+        self.assertEqual(
+            Dirty, 0,
+            'The TEB page is expected to be clean after snapshot.'
+        )
+
+        # Dirty the TEB page.
+        Code = WriteMemory64(self.TebGva, 1) + Int3
+        memmove(self.CodeHva, Code, len(Code))
+        self.Partition.SetRip(
+            0,
+            self.CodeGva
+        )
+
+        self.Partition.RunVp(0)
+
+        # Ensure the page is dirty.
+        Dirty = self.Partition.QueryGpaDirtyPage(TebGpa)
+
+        self.assertEqual(
+            Dirty, 1,
+            'The TEB page is expected to be dirty.'
+        )
+
+        # Restore the snapshot.
+        self.Partition.Restore(Snapshot)
+
+        # Ensure the page is back clear again.
+        Dirty = self.Partition.QueryGpaDirtyPage(TebGpa)
+
+        self.assertEqual(
+            Dirty, 0,
+            'The TEB page is expected to be clean after restore.'
         )
 
 def main(argc, argv):

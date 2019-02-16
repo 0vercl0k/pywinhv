@@ -411,7 +411,7 @@ class WHvPartition(object):
         assert Success, 'WHvQueryGpaRangeDirtyBitmap failed with: %x.' % Ret
         return Bits
 
-    def ClearGpaRangeDirtyBitmap(self, Gpa, RangeSize):
+    def ClearGpaRangeDirtyPages(self, Gpa, RangeSize):
         '''Clear the dirty bits on a GPA range.'''
         Success, _, Ret = hvplat.WHvQueryGpaRangeDirtyBitmap(
             self.Partition,
@@ -421,6 +421,13 @@ class WHvPartition(object):
         )
 
         assert Success, 'WHvQueryGpaRangeDirtyBitmap failed with: %x.' % Ret
+
+    def ClearGpaDirtyPage(self, Gpa):
+        '''Clear the dirty bit for a specific GPA page.'''
+        return self.ClearGpaRangeDirtyPages(
+            Gpa,
+            0x1000
+        )
 
     def QueryGpaRangeDirtyPages(self, Gpa, RangeSize):
         '''Get a list of the dirty GPAs.'''
@@ -438,13 +445,19 @@ class WHvPartition(object):
 
         return DirtyPages
 
+    def QueryGpaDirtyPage(self, Gpa):
+        '''Get if the GPA page is dirty or not.'''
+        return self.QueryGpaRangeDirtyBitmap(
+            Gpa,
+            0x1000
+        )[0]
+
     def Save(self):
         '''Save a snapshot of the virtual processors registers as well as the physical
         memory space. It can be restored with Restore.'''
         Snapshot = {
             'VP' : [],
             'Mem' : [],
-            'Translation' : None
         }
 
         # XXX: SpecCtrl & cie, ensure they are available in the VP.
@@ -462,7 +475,13 @@ class WHvPartition(object):
                 Gpa, Hva, Page
             ))
 
-        Snapshot['TranslationTable'] = self.GetTranslationTable()
+        self.ClearGpaRangeDirtyPages(
+            0,
+            # XXX: This assumes that the physical address space is packed and that
+            # there is no hole.
+            len(self.TranslationTable) * 0x1000
+        )
+
         return Snapshot
 
     def Restore(self, Snapshot):
@@ -474,10 +493,18 @@ class WHvPartition(object):
                 dict(zip(hvplat.AllRegisters, Registers))
             )
 
+        # XXX: Don't restore read-only pages?
+        self.TranslationTable = {}
         for Gpa, Hva, Page in Snapshot['Mem']:
             ct.memmove(Hva, Page, 0x1000)
+            self.TranslationTable[Gpa] = Hva
 
-        self.TranslationTable = Snapshot['TranslationTable']
+        self.ClearGpaRangeDirtyPages(
+            0,
+            # XXX: This assumes that the physical address space is packed and that
+            # there is no hole.
+            len(self.TranslationTable) * 0x1000
+        )
 
     def GetTranslationTable(self):
         '''Return a copy of the translation table.'''
