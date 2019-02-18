@@ -318,7 +318,7 @@ class WHvPartition(object):
         Hva, CodeLength = self.MapGpaRange(
             Gpa,
             Code,
-            'rx'
+            Flags
         )
 
         return (Hva, CodeLength)
@@ -387,7 +387,10 @@ class WHvPartition(object):
         )
 
         assert ResultCode.value == whv.WHvTranslateGvaResultSuccess, 'TranslateGva(%x) failed with %s' % (Gva, ResultCode)
-        return self.TranslateGpa(Gpa) + Offset
+        Hva = self.TranslateGpa(Gpa)
+        if Hva is None:
+            return None
+        return Hva + Offset
 
     def GetPartitionCounters(self, Counter):
         '''Get a partition performance counter.'''

@@ -631,6 +631,7 @@ class UserCode(unittest.TestCase):
 
     def test_gva_translations(self):
         '''Run GVA translations on the partition.'''
+        Gpas = []
         for Gva, _ in self.Pages:
             ResultCode, Gpa = self.Partition.TranslateGva(
                 0,
@@ -641,6 +642,13 @@ class UserCode(unittest.TestCase):
                 ResultCode.value, hv.WHvTranslateGvaResultSuccess,
                 'TranslateGva(%x) returned %s.' % (Gpa, ResultCode)
             )
+
+            Gpas.append(Gva)
+
+        self.assertEqual(
+            len(set(Gpas)), len(Gpas),
+            'Every GVA should map to a unique GPA'
+        )
 
     def test_simple_user(self):
         '''Run a bunch of 'inc rax' followed by an 'int3' which we should get
