@@ -355,7 +355,7 @@ class UserCode(unittest.TestCase):
         self.assertEqual(
             TranslationResult.value,
             hv.WHvTranslateGvaResultPrivilegeViolation,
-            'The translation should still return a PrivilegeViolation even if we passed WHvTranslateGvaFlagPrivilegeExempt.'
+            'The translation should still return a PrivilegeViolation even with WHvTranslateGvaFlagPrivilegeExempt.'
         )
 
     def test_clear_dirty_pages(self):
