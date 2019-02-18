@@ -261,13 +261,18 @@ def BuildVirtualAddressSpace(Partition, PageGvas, Policy):
         ))
 
     # Those keep track of the various paging structure we have already allocated.
-    GvaEntries = {}
-    PtEntries = {}
-    PdEntries = {}
-    PdptEntries = {}
-    Pml4Entries = {}
+    # The keys of the ledger looks like the following:
+    #   - (255) - PML4E=255
+    #   - (255, 485) - PML4E=255, PDPTE=485
+    #   - (255, 485, 337) - PML4E=255, PDPTE=485, PDE=337
+    #   - (255, 485, 337, 353) - PML4E=255, PDPTE=485, PDE=337, PTE=353
+    #   - etc.
+    # What this means is that we have already allocated a page for the PML4E=255, a page
+    # for PML4E=255-PDPTE=485, etc. The values are the (HVA, GPA) of the page.
+    Ledger = {}
 
-    def AllocateTableIfNeeded(Ledger, Idx, Flags = 'rw'):
+    def AllocateTableIfNeeded(Idx, Flags = 'rw'):
+        '''If an entry is already available in the Ledger, return its addressed.'''
         PageInfo = Ledger.get(Idx, None)
         if PageInfo is not None:
             return PageInfo
@@ -296,15 +301,17 @@ def BuildVirtualAddressSpace(Partition, PageGvas, Policy):
     IsUserAddress = lambda Gva: Gva <= 0x00007fffffff0000
 
     for Gva, PtIdx, PdIdx, PdptIdx, Pml4Idx, Access in PageTables:
-        # Allocate a page for each level if needed.
-        # Make sure to allocate the actual GVA page with proper accesses, we map the
-        # paging structure as read/write.
-        GvaHva, GvaGpa = AllocateTableIfNeeded(PtEntries, PtIdx, Access)
-        PtHva, PtGpa = AllocateTableIfNeeded(PdEntries, PdIdx)
-        PdHva, PdGpa = AllocateTableIfNeeded(PdptEntries, PdptIdx)
-        PdptHva, PdptGpa = AllocateTableIfNeeded(Pml4Entries, Pml4Idx)
-        Pml4Entries.setdefault(Pml4Idx, (Pml4Hva, Pml4Gpa))
-        GvaEntries.setdefault(Gva, (GvaHva, GvaGpa))
+        # Allocate a page for each level if needed. We allocate the paging structures
+        # as rwx. We just map the leaf with the appropriate permissions.
+        Idx = (Pml4Idx, )
+        PdptHva, PdptGpa = AllocateTableIfNeeded(Idx)
+        Idx = (Pml4Idx, PdptIdx)
+        PdHva, PdGpa = AllocateTableIfNeeded(Idx)
+        Idx = (Pml4Idx, PdptIdx, PdIdx)
+        PtHva, PtGpa = AllocateTableIfNeeded(Idx)
+        # Make sure to allocate the actual GVA page with proper permissions.
+        Idx = (Pml4Idx, PdptIdx, PdIdx, PtIdx)
+        GvaHva, GvaGpa = AllocateTableIfNeeded(Idx, Access)
 
         # print 'Pml4Hva', hex(Pml4Hva), 'Pml4Gpa', hex(Pml4Gpa), 'Pfn', GetPfnFromGpa(Pml4Gpa), 'Pml4e', 255
         # print 'PdptHva', hex(PdptHva), 'PdptGpa', hex(PdptGpa), 'Pfn', GetPfnFromGpa(PdptGpa), 'Pdpte', PdptIdx
@@ -342,7 +349,7 @@ def BuildVirtualAddressSpace(Partition, PageGvas, Policy):
         Pt = (SIZE_T * 512).from_address(PtHva)
         Pt[PtIdx] = TableEntry.AsUINT64
 
-    PageCount = len(GvaEntries) + len(PtEntries) + len(PdEntries) + len(PdptEntries) + len(Pml4Entries) + 1
+    PageCount = len(Ledger) + 1
     print 'This VA requires', PageCount, 'pages total or', (PageCount * 0x1000) / 1024 / 1024, 'MB'
     return Pml4Gpa
 

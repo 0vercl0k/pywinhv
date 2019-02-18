@@ -43,9 +43,9 @@ class WHvPartition(object):
         self.TranslationTable = {}
 
         # Create the partition.
-        Success, Partition, Ret = hvplat.WHvCreatePartition()
+        Success, Handle, Ret = hvplat.WHvCreatePartition()
         assert Success, 'WHvCreatePartition failed in context manager with %x.' % Ret
-        self.Handle = Partition
+        self.Handle = Handle
 
         # Set-up the partition with a number of VPs.
         Property = whv.WHV_PARTITION_PROPERTY()
@@ -284,7 +284,6 @@ class WHvPartition(object):
         if 'd' in Flags:
             WHvFlags |= whv.WHvMapGpaRangeFlagTrackDirtyPages
 
-        print '>> WHvMapGpaRange', hex(Gpa), hex(SizeInBytes), Flags
         Success, Ret = hvplat.WHvMapGpaRange(
             self.Handle,
             Hva,

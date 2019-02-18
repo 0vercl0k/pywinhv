@@ -124,8 +124,8 @@ PF_ERRCODE_USER = 1 << 2
 PF_ERRCODE_RESERVED_WRITE = 1 << 3
 PF_ERRCODE_IFETCH = 1 << 4
 
-class UserCode(unittest.TestCase):
-    '''Test everything related to running long mode code.'''
+class FeatureTests(unittest.TestCase):
+    '''Test everything related to features.'''
     @classmethod
     def setUpClass(cls):
         '''This method is called once and initialize a partition object with a bunch
@@ -142,6 +142,14 @@ class UserCode(unittest.TestCase):
             (cls.ReadOnlyGva, 'r'),
             (cls.ReadWriteGva, 'rw'),
             (cls.KernelPageGva, 'rwx'),
+            # Those VAs have the same PTE, and used to trigger a bug in the
+            # page table generation.
+            # PML4E=255, PDPTE=485, PDE=310, PTE=353.
+            (0x00007ff966d61000, 'r'),
+            # PML4E=255, PDPTE=485, PDE=337, PTE=353.
+            (0x00007ff96a361000, 'r'),
+            # PML4E=255, PDPTE=309, PDE=172, PTE=353
+            (0x0000014d55961000, 'r'),
         ]
 
         cls.Policy = PackedPhysicalMemory()
@@ -770,9 +778,10 @@ class UserCode(unittest.TestCase):
             'There should not be any 2MB pages.'
         )
 
+        PageCount = 24
         self.assertEqual(
-            MemoryCounters.Mapped4KPageCount, 14,
-            'There should be only 14 pages.'
+            MemoryCounters.Mapped4KPageCount, PageCount,
+            'There should be only %d pages.' % PageCount
         )
 
     def test_vp_counters(self):
@@ -853,7 +862,7 @@ class UserCode(unittest.TestCase):
         '''Ensure that the translation table is saved in a snapshot.'''
         TranslationTable = self.Partition.GetTranslationTable()
         Snapshot = self.Partition.Save()
-        PageGpa = 0x10000
+        PageGpa = self.Policy.GetGpa()
         Hva, Size = self.Partition.MapGpaRange(
             PageGpa,
             'hello',
