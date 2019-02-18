@@ -519,7 +519,7 @@ def WHvSetVirtualProcessorRegisters(Partition, VpIndex, Registers):
     Success = Ret == 0
     return (Success, Ret & 0xffffffff)
 
-def WHvMapGpaRange(Partition, SourceAddress, GuestAddress, SizeInBytes, FlagsStr):
+def WHvMapGpaRange(Partition, SourceAddress, GuestAddress, SizeInBytes, Flags):
     '''
     HRESULT
     WINAPI
@@ -535,20 +535,6 @@ def WHvMapGpaRange(Partition, SourceAddress, GuestAddress, SizeInBytes, FlagsStr
     caller's process as the backing memory for that range. The operation replaces any
     previous mappings for the specified GPA pages.
     '''
-    FlagsStr = FlagsStr.lower()
-    Flags = whv.WHvMapGpaRangeFlagNone
-    if 'r' in FlagsStr:
-        Flags |= whv.WHvMapGpaRangeFlagRead
-
-    if 'w' in FlagsStr:
-        Flags |= whv.WHvMapGpaRangeFlagWrite
-
-    if 'x' in FlagsStr:
-        Flags |= whv.WHvMapGpaRangeFlagExecute
-
-    if 'd' in FlagsStr:
-        Flags |= whv.WHvMapGpaRangeFlagTrackDirtyPages
-
     assert (SourceAddress & 0xfff) == 0, 'SourceAddress(%x) needs to be page aligned.' % SourceAddress
     assert (SizeInBytes % 0x1000) == 0, 'SizeInBytes(%x) needs to be page aligned.' % SizeInBytes
 

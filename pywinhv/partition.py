@@ -271,12 +271,26 @@ class WHvPartition(object):
             # Force the 'd' dirty flag that is used for save/restore.
             Flags += 'd'
 
+        WHvFlags = whv.WHvMapGpaRangeFlagNone
+        if 'r' in Flags:
+            WHvFlags |= whv.WHvMapGpaRangeFlagRead
+
+        if 'w' in Flags:
+            WHvFlags |= whv.WHvMapGpaRangeFlagWrite
+
+        if 'x' in Flags:
+            WHvFlags |= whv.WHvMapGpaRangeFlagExecute
+
+        if 'd' in Flags:
+            WHvFlags |= whv.WHvMapGpaRangeFlagTrackDirtyPages
+
+        print '>> WHvMapGpaRange', hex(Gpa), hex(SizeInBytes), Flags
         Success, Ret = hvplat.WHvMapGpaRange(
             self.Handle,
             Hva,
             Gpa,
             SizeInBytes,
-            Flags
+            WHvFlags
         )
 
         assert Success, 'WHvMapGpaRange failed with %x.' % Ret
