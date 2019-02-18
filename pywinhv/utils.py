@@ -242,7 +242,6 @@ def BuildVirtualAddressSpace(Partition, PageGvas, Policy):
         map(lambda Gva: (Gva[0] % 0x1000) == 0, PageGvas)
     ), 'GVAs are expected to be page aligned.'
 
-    # XXX: Handle page rights and kernel mode pages maybe?
     PageTables = []
 
     # Walk the GVA and keep track of the various paging structures
@@ -260,9 +259,6 @@ def BuildVirtualAddressSpace(Partition, PageGvas, Policy):
             Pml4Index,
             Access
         ))
-
-    from pprint import pprint
-    pprint(PageTables)
 
     # Those keep track of the various paging structure we have already allocated.
     GvaEntries = {}
@@ -308,12 +304,13 @@ def BuildVirtualAddressSpace(Partition, PageGvas, Policy):
         PdHva, PdGpa = AllocateTableIfNeeded(PdptEntries, PdptIdx)
         PdptHva, PdptGpa = AllocateTableIfNeeded(Pml4Entries, Pml4Idx)
         Pml4Entries.setdefault(Pml4Idx, (Pml4Hva, Pml4Gpa))
+        GvaEntries.setdefault(Gva, (GvaHva, GvaGpa))
 
-        print 'Pml4Hva', hex(Pml4Hva), 'Pml4Gpa', hex(Pml4Gpa), 'Pfn', GetPfnFromGpa(Pml4Gpa), 'Pml4e', 255
-        print 'PdptHva', hex(PdptHva), 'PdptGpa', hex(PdptGpa), 'Pfn', GetPfnFromGpa(PdptGpa), 'Pdpte', PdptIdx
-        print '  PdHva', hex(PdHva), '  PdGpa', hex(PdGpa), 'Pfn', GetPfnFromGpa(PdGpa),'  Pde', PdIdx
-        print '  PtHva', hex(PtHva), '  PtGpa', hex(PtGpa), 'Pfn', GetPfnFromGpa(PtGpa), '  Pte', PtIdx
-        print 'PageHva', hex(GvaHva), 'PageGpa', hex(GvaGpa), 'Pfn', GetPfnFromGpa(GvaGpa)
+        # print 'Pml4Hva', hex(Pml4Hva), 'Pml4Gpa', hex(Pml4Gpa), 'Pfn', GetPfnFromGpa(Pml4Gpa), 'Pml4e', 255
+        # print 'PdptHva', hex(PdptHva), 'PdptGpa', hex(PdptGpa), 'Pfn', GetPfnFromGpa(PdptGpa), 'Pdpte', PdptIdx
+        # print '  PdHva', hex(PdHva), '  PdGpa', hex(PdGpa), 'Pfn', GetPfnFromGpa(PdGpa),'  Pde', PdIdx
+        # print '  PtHva', hex(PtHva), '  PtGpa', hex(PtGpa), 'Pfn', GetPfnFromGpa(PtGpa), '  Pte', PtIdx
+        # print 'PageHva', hex(GvaHva), 'PageGpa', hex(GvaGpa), 'Pfn', GetPfnFromGpa(GvaGpa)
         # Now that we have the memory backing the various levels we
         # link them together.
         TableEntry = whv.MMPTE_HARDWARE()
@@ -346,7 +343,7 @@ def BuildVirtualAddressSpace(Partition, PageGvas, Policy):
         Pt[PtIdx] = TableEntry.AsUINT64
 
     PageCount = len(GvaEntries) + len(PtEntries) + len(PdEntries) + len(PdptEntries) + len(Pml4Entries) + 1
-    print 'This VA requires', PageCount, 'pages total which is', (PageCount * 0x1000) / 1024 / 1024, 'MB'
+    print 'This VA requires', PageCount, 'pages total or', (PageCount * 0x1000) / 1024 / 1024, 'MB'
     return Pml4Gpa
 
 def main(argc, argv):

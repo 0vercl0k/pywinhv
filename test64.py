@@ -157,6 +157,207 @@ class UserCode(unittest.TestCase):
         '''Restore the context everytime before executing a test.'''
         self.Partition.Restore(self.Snapshot)
 
+    def test_translate_gva_with_permcheck_kern(self):
+        '''Translate a GVA->GPA and validate page permissions against a kernl page.'''
+        TranslationResult, _ = self.Partition.TranslateGva(
+            0,
+            self.KernelPageGva,
+            'r'
+        )
+
+        self.assertEqual(
+            TranslationResult.value,
+            hv.WHvTranslateGvaResultPrivilegeViolation,
+            'The kernel page should not be readable from cpl3.'
+        )
+
+        TranslationResult, _ = self.Partition.TranslateGva(
+            0,
+            self.KernelPageGva,
+            're'
+        )
+
+        self.assertEqual(
+            TranslationResult.value,
+            hv.WHvTranslateGvaResultSuccess,
+            'The kernel page should be translatable from cpl3 with PrivilegeExempt.'
+        )
+
+    def test_translate_gva_with_permcheck_rx(self):
+        '''Translate a GVA->GPA and validate page permissions against a rx page.'''
+        TranslationResult, _ = self.Partition.TranslateGva(
+            0,
+            self.CodeGva,
+            'r'
+        )
+
+        self.assertEqual(
+            TranslationResult.value,
+            hv.WHvTranslateGvaResultSuccess,
+            'The code page should be marked as readable in the page tables.'
+        )
+
+        TranslationResult, _ = self.Partition.TranslateGva(
+            0,
+            self.CodeGva,
+            'w'
+        )
+
+        self.assertEqual(
+            TranslationResult.value,
+            hv.WHvTranslateGvaResultPrivilegeViolation,
+            'The code page page should not be marked as writeable in the page tables.'
+        )
+
+        TranslationResult, _ = self.Partition.TranslateGva(
+            0,
+            self.CodeGva,
+            'x'
+        )
+
+        self.assertEqual(
+            TranslationResult.value,
+            hv.WHvTranslateGvaResultSuccess,
+            'The code page should be marked as executable in the page tables.'
+        )
+
+        TranslationResult, _ = self.Partition.TranslateGva(
+            0,
+            self.CodeGva,
+            'rx'
+        )
+
+        self.assertEqual(
+            TranslationResult.value,
+            hv.WHvTranslateGvaResultSuccess,
+            'The code page should be marked as rw in the page tables.'
+        )
+
+        TranslationResult, _ = self.Partition.TranslateGva(
+            0,
+            self.CodeGva,
+            'rwx'
+        )
+
+        self.assertEqual(
+            TranslationResult.value,
+            hv.WHvTranslateGvaResultPrivilegeViolation,
+            'The code page should not be marked as rwx in the page tables.'
+        )
+
+    def test_translate_gva_with_permcheck_rx(self):
+        '''Translate a GVA->GPA and validate page permissions against a rx page.'''
+        TranslationResult, _ = self.Partition.TranslateGva(
+            0,
+            self.CodeGva,
+            'r'
+        )
+
+        self.assertEqual(
+            TranslationResult.value,
+            hv.WHvTranslateGvaResultSuccess,
+            'The code page should be marked as readable in the page tables.'
+        )
+
+        TranslationResult, _ = self.Partition.TranslateGva(
+            0,
+            self.CodeGva,
+            'w'
+        )
+
+        self.assertEqual(
+            TranslationResult.value,
+            hv.WHvTranslateGvaResultPrivilegeViolation,
+            'The code page page should not be marked as writeable in the page tables.'
+        )
+
+        TranslationResult, _ = self.Partition.TranslateGva(
+            0,
+            self.CodeGva,
+            'x'
+        )
+
+        self.assertEqual(
+            TranslationResult.value,
+            hv.WHvTranslateGvaResultSuccess,
+            'The code page should be marked as executable in the page tables.'
+        )
+
+        TranslationResult, _ = self.Partition.TranslateGva(
+            0,
+            self.CodeGva,
+            'rx'
+        )
+
+        self.assertEqual(
+            TranslationResult.value,
+            hv.WHvTranslateGvaResultSuccess,
+            'The code page should be marked as rw in the page tables.'
+        )
+
+        TranslationResult, _ = self.Partition.TranslateGva(
+            0,
+            self.CodeGva,
+            'rwx'
+        )
+
+        self.assertEqual(
+            TranslationResult.value,
+            hv.WHvTranslateGvaResultPrivilegeViolation,
+            'The code page should not be marked as rwx in the page tables.'
+        )
+
+    def test_translate_gva_with_permcheck_ro(self):
+        '''Translate a GVA->GPA and validate page permissions against a read-only
+        page.'''
+        TranslationResult, _ = self.Partition.TranslateGva(
+            0,
+            self.ReadOnlyGva,
+            'r'
+        )
+
+        self.assertEqual(
+            TranslationResult.value,
+            hv.WHvTranslateGvaResultSuccess,
+            'The read-only page should be marked as readable in the page tables.'
+        )
+
+        TranslationResult, _ = self.Partition.TranslateGva(
+            0,
+            self.ReadOnlyGva,
+            'w'
+        )
+
+        self.assertEqual(
+            TranslationResult.value,
+            hv.WHvTranslateGvaResultPrivilegeViolation,
+            'The read-only page should not be marked as writeable in the page tables.'
+        )
+
+        TranslationResult, _ = self.Partition.TranslateGva(
+            0,
+            self.ReadOnlyGva,
+            'x'
+        )
+
+        self.assertEqual(
+            TranslationResult.value,
+            hv.WHvTranslateGvaResultPrivilegeViolation,
+            'The read-only page should not be marked as executable in the page tables.'
+        )
+
+        TranslationResult, _ = self.Partition.TranslateGva(
+            0,
+            self.ReadOnlyGva,
+            'xe'
+        )
+
+        self.assertEqual(
+            TranslationResult.value,
+            hv.WHvTranslateGvaResultPrivilegeViolation,
+            'The translation should still return a PrivilegeViolation even if we passed WHvTranslateGvaFlagPrivilegeExempt.'
+        )
+
     def test_clear_dirty_pages(self):
         '''Clear the dirty bits of the pages.'''
         Code = WriteMemory64(self.TebGva, 1) + Int3

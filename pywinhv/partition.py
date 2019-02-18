@@ -331,13 +331,23 @@ class WHvPartition(object):
     def TranslateGva(self, VpIndex, Gva, Flags = None):
         '''Translate a GVA into a GPA.'''
         if Flags is None:
-            Flags = whv.WHvTranslateGvaFlagValidateRead | whv.WHvTranslateGvaFlagPrivilegeExempt
+            Flags = 're'
+
+        WHvFlags = whv.WHvTranslateGvaFlagNone
+        if 'r' in Flags:
+            WHvFlags |= whv.WHvTranslateGvaFlagValidateRead
+        if 'w' in Flags:
+            WHvFlags |= whv.WHvTranslateGvaFlagValidateWrite
+        if 'x' in Flags:
+            WHvFlags |= whv.WHvTranslateGvaFlagValidateExecute
+        if 'e' in Flags:
+            WHvFlags |= whv.WHvTranslateGvaFlagPrivilegeExempt
 
         Success, ResultCode, Gpa, Ret = hvplat.WHvTranslateGva(
             self.Handle,
             VpIndex,
             Gva,
-            Flags
+            WHvFlags
         )
 
         assert Success, 'WHvTranslateGva failed with: %x.' % Ret
@@ -355,9 +365,6 @@ class WHvPartition(object):
     def TranslateGvaToHva(self, VpIndex, Gva, Flags = None):
         '''Translate a GVA to an HVA. This combines TranslateGva / TranslateGpa to
         go from a GVA to an HVA.'''
-        if Flags is None:
-            Flags = whv.WHvTranslateGvaFlagValidateRead | whv.WHvTranslateGvaFlagPrivilegeExempt
-
         GvaAligned, Offset = utils.SplitAddress(Gva)
         ResultCode, Gpa = self.TranslateGva(
             VpIndex,
