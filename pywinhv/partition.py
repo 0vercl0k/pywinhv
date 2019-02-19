@@ -262,11 +262,12 @@ class WHvPartition(object):
         )
 
         if TranslationResult.value == whv.WHvTranslateGvaResultSuccess and Hva is not None:
+            print Hva
             HowManyLeft = 0x1000 - (Hva & 0xfff)
             HowMany = min(HowManyLeft, 16)
-            Code = ct.string_at(Hva, HowMany)
+            Code = ct.string_at(Hva, HowMany).encode('hex')
 
-        print '%016x' % Rip, Code.encode('hex')
+        print '%016x' % Rip, Code
 
     def MapGpaRangeWithoutContent(self, Gpa, SizeInBytes, Flags):
         '''Map a GPA range in the partition. This takes care of allocating
@@ -307,7 +308,10 @@ class WHvPartition(object):
         )
 
         assert Success, 'WHvMapGpaRange failed with: %s.' % hvplat.WHvReturn(Ret)
-        self.TranslationTable[Gpa] = Hva
+        for Idx in range(SizeInBytes / 0x1000):
+            CurGpa = Gpa + (Idx * 0x1000)
+            CurHva = Hva + (Idx * 0x1000)
+            self.TranslationTable[CurGpa] = CurHva
         return (Hva, Gpa, SizeInBytes)
 
     def MapGpaRange(self, Gpa, Buffer, Flags):
