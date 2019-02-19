@@ -722,6 +722,18 @@ def WHvGetVirtualProcessorCounters(Partition, VpIndex, CounterSet):
     whv.delete_PUINT32(BytesWritten)
     return (Success, Buffer, Ret & 0xffffffff)
 
+class WHvReturn(Enum):
+    # thx yrp
+    WHV_E_UNKNOWN_CAPABILITY = 0x80370300
+    WHV_E_INSUFFICIENT_BUFFER = 0x80370301
+    WHV_E_UNKNOWN_PROPERTY = 0x80370302
+    WHV_E_UNSUPPORTED_HYPERVISOR_CONFIG = 0x80370303
+    WHV_E_INVALID_PARTITION_CONFIG = 0x80370304
+    WHV_E_GPA_RANGE_NOT_FOUND = 0x80370305
+    WHV_E_VP_ALREADY_EXISTS = 0x80370306
+    WHV_E_VP_DOES_NOT_EXIST = 0x80370307
+    WHV_E_INVALID_VP_STATE = 0x80370308
+    WHV_E_INVALID_VP_REGISTER_NAME = 0x80370309
 
 class WHvExitReason(Enum):
     WHvRunVpExitReasonNone = 0x00000000

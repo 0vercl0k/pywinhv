@@ -123,7 +123,7 @@ class WHvPartition(object):
             self.Handle, VpIndex
         )
 
-        assert Success, ('WHvRunVirtualProcessor failed with %x.' % Ret)
+        assert Success, 'WHvRunVirtualProcessor failed with: %s.' % hvplat.WHvReturn(Ret)
         return ExitContext, hvplat.WHvExitReason(ExitContext.ExitReason)
 
     def SetRegisters(self, VpIndex, Registers):
@@ -134,7 +134,7 @@ class WHvPartition(object):
             Registers
         )
 
-        assert Success, 'WHvSetVirtualProcessorRegisters failed with %x.' % Ret
+        assert Success, 'WHvSetVirtualProcessorRegisters failed with: %s.' % hvplat.WHvReturn(Ret)
 
     def SetRip(self, VpIndex, Rip):
         '''Set the @rip register of a VP.'''
@@ -152,7 +152,7 @@ class WHvPartition(object):
             Registers
         )
 
-        assert Success, 'GetRegisters failed with %x.' % Ret
+        assert Success, 'GetRegisters failed with: %s.' % hvplat.WHvReturn(Ret)
         if Reg64:
             Registers = map(
                 lambda R: R.Reg64,
@@ -206,8 +206,9 @@ class WHvPartition(object):
             R[3].Reg64, R[4].Reg64, R[5].Reg64
         )
 
+        Rip = R[6].Reg64
         print 'rip=%016x rsp=%016x rbp=%016x' % (
-            R[6].Reg64, R[7].Reg64, R[8].Reg64
+            Rip, R[7].Reg64, R[8].Reg64
         )
 
         print ' r8=%016x  r9=%016x r10=%016x' % (
@@ -254,6 +255,19 @@ class WHvPartition(object):
             R[24].Reg64
         )
 
+        Code = '???'
+        Hva = self.TranslateGvaToHva(
+            VpIndex,
+            Rip
+        )
+
+        if Hva is not None:
+            HowManyLeft = 0x1000 - (Hva & 0xfff)
+            HowMany = min(HowManyLeft, 16)
+            Code = ct.string_at(Hva, HowMany)
+
+        print '%016x' % Rip, Code.encode('hex')
+
     def MapGpaRangeWithoutContent(self, Gpa, SizeInBytes, Flags):
         '''Map a GPA range in the partition. This takes care of allocating
         memory in the host and mapping it in the guest.'''
@@ -292,7 +306,7 @@ class WHvPartition(object):
             WHvFlags
         )
 
-        assert Success, 'WHvMapGpaRange failed with %x.' % Ret
+        assert Success, 'WHvMapGpaRange failed with: %s.' % hvplat.WHvReturn(Ret)
         self.TranslationTable[Gpa] = Hva
         return (Hva, Gpa, SizeInBytes)
 
@@ -363,7 +377,7 @@ class WHvPartition(object):
             WHvFlags
         )
 
-        assert Success, 'WHvTranslateGva failed with: %x.' % Ret
+        assert Success, 'WHvTranslateGva failed with: %s.' % hvplat.WHvReturn(Ret)
         return (hvplat.WHvTranslateGvaResultCode(ResultCode), Gpa)
 
     def TranslateGpa(self, Gpa):
@@ -398,7 +412,7 @@ class WHvPartition(object):
             Counter
         )
 
-        assert Success, 'WHvGetPartitionCounters failed with: %x.' % Ret
+        assert Success, 'WHvGetPartitionCounters failed with: %s.' % hvplat.WHvReturn(Ret)
         return Counters
 
     def GetVpCounters(self, VpIndex, Counter):
@@ -409,7 +423,7 @@ class WHvPartition(object):
             Counter
         )
 
-        assert Success, 'WHvGetVirtualProcessorCounters failed with: %x.' % Ret
+        assert Success, 'WHvGetVirtualProcessorCounters failed with: %s.' % hvplat.WHvReturn(Ret)
 
         Result = {
             whv.WHvProcessorCounterSetRuntime : Counters.Runtime,
@@ -431,7 +445,7 @@ class WHvPartition(object):
             RangeSize
         )
 
-        assert Success, 'WHvQueryGpaRangeDirtyBitmap failed with: %x.' % Ret
+        assert Success, 'WHvQueryGpaRangeDirtyBitmap failed with: %s.' % hvplat.WHvReturn(Ret)
         return Bits
 
     def ClearGpaRangeDirtyPages(self, Gpa, RangeSize):
@@ -443,7 +457,7 @@ class WHvPartition(object):
             True
         )
 
-        assert Success, 'WHvQueryGpaRangeDirtyBitmap failed with: %x.' % Ret
+        assert Success, 'WHvQueryGpaRangeDirtyBitmap failed with: %s.' % hvplat.WHvReturn(Ret)
 
     def ClearGpaDirtyPage(self, Gpa):
         '''Clear the dirty bit for a specific GPA page.'''
