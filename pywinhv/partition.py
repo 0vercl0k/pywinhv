@@ -256,12 +256,12 @@ class WHvPartition(object):
         )
 
         Code = '???'
-        Hva = self.TranslateGvaToHva(
+        TranslationResult, Hva = self.TranslateGvaToHva(
             VpIndex,
             Rip
         )
 
-        if Hva is not None:
+        if TranslationResult.value == whv.WHvTranslateGvaResultSuccess and Hva is not None:
             HowManyLeft = 0x1000 - (Hva & 0xfff)
             HowMany = min(HowManyLeft, 16)
             Code = ct.string_at(Hva, HowMany)
@@ -387,23 +387,27 @@ class WHvPartition(object):
         Hva = self.TranslationTable.get(GpaAligned, None)
         if Hva is not None:
             return Hva + Offset
+
         return None
 
     def TranslateGvaToHva(self, VpIndex, Gva, Flags = None):
         '''Translate a GVA to an HVA. This combines TranslateGva / TranslateGpa to
         go from a GVA to an HVA.'''
         GvaAligned, Offset = utils.SplitAddress(Gva)
-        ResultCode, Gpa = self.TranslateGva(
+        TranslationResult, Gpa = self.TranslateGva(
             VpIndex,
             GvaAligned,
             Flags
         )
 
-        assert ResultCode.value == whv.WHvTranslateGvaResultSuccess, 'TranslateGva(%x) failed with %s' % (Gva, ResultCode)
+        if TranslationResult.value != whv.WHvTranslateGvaResultSuccess:
+            return TranslationResult, None
+
         Hva = self.TranslateGpa(Gpa)
         if Hva is None:
-            return None
-        return Hva + Offset
+            return TranslationResult, None
+
+        return TranslationResult, Hva + Offset
 
     def GetPartitionCounters(self, Counter):
         '''Get a partition performance counter.'''

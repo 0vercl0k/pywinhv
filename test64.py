@@ -154,10 +154,12 @@ class FeatureTests(unittest.TestCase):
 
         cls.Policy = PackedPhysicalMemory()
         cls.Partition = CreatePartition(cls.Pages, cls.Policy, cls.TebGva)
-        cls.CodeHva = cls.Partition.TranslateGvaToHva(
+        TranslationResult, cls.CodeHva = cls.Partition.TranslateGvaToHva(
             0,
             cls.CodeGva
         )
+
+        assert TranslationResult.value == hv.WHvTranslateGvaResultSuccess, 'The GVA->HVA translation should be a success'
 
         cls.Snapshot = cls.Partition.Save()
 
@@ -511,9 +513,15 @@ class FeatureTests(unittest.TestCase):
 
     def test_execute_readonly(self):
         '''Execute read-only memory.'''
-        Hva = self.Partition.TranslateGvaToHva(
+        TranslationResult, Hva = self.Partition.TranslateGvaToHva(
             0,
             self.ReadOnlyGva
+        )
+
+        self.assertEqual(
+            TranslationResult.value,
+            hv.WHvTranslateGvaResultSuccess,
+            'The GVA->HVA translation should be a success.'
         )
 
         Content = IncRax + Int3
@@ -545,9 +553,15 @@ class FeatureTests(unittest.TestCase):
 
     def test_write_to_readonly(self):
         '''Write to read-only memory.'''
-        Hva = self.Partition.TranslateGvaToHva(
+        TranslationResult, Hva = self.Partition.TranslateGvaToHva(
             0,
             self.ReadOnlyGva
+        )
+
+        self.assertEqual(
+            TranslationResult.value,
+            hv.WHvTranslateGvaResultSuccess,
+            'The GVA->HVA translation should be a success.'
         )
 
         Value = 0xdeadbeefbaadc0de
@@ -581,9 +595,15 @@ class FeatureTests(unittest.TestCase):
 
     def test_read_from_readonly(self):
         '''Read from read-only memory.'''
-        Hva = self.Partition.TranslateGvaToHva(
+        TranslationResult, Hva = self.Partition.TranslateGvaToHva(
             0,
             self.ReadOnlyGva
+        )
+
+        self.assertEqual(
+            TranslationResult.value,
+            hv.WHvTranslateGvaResultSuccess,
+            'The GVA->HVA translation should be a success.'
         )
 
         Value = 0xdeadbeefbaadc0de
@@ -610,9 +630,15 @@ class FeatureTests(unittest.TestCase):
 
     def test_read_from_gs(self):
         '''Read memory from the GS segment.'''
-        TebHva = self.Partition.TranslateGvaToHva(
+        TranslationResult, TebHva = self.Partition.TranslateGvaToHva(
             0,
             self.TebGva
+        )
+
+        self.assertEqual(
+            TranslationResult.value,
+            hv.WHvTranslateGvaResultSuccess,
+            'The GVA->HVA translation should be a success.'
         )
 
         TebValue = 0xdeadbeefbaadc0de
@@ -826,9 +852,15 @@ class FeatureTests(unittest.TestCase):
 
     def test_save_restore_memory(self):
         '''Take a snapshot modify memory and resore it.'''
-        TebHva = self.Partition.TranslateGvaToHva(
+        TranslationResult, TebHva = self.Partition.TranslateGvaToHva(
             0,
             self.TebGva
+        )
+
+        self.assertEqual(
+            TranslationResult.value,
+            hv.WHvTranslateGvaResultSuccess,
+            'The GVA->HVA translation should be a success.'
         )
 
         TebContent = '\xaa' * 0x1000
