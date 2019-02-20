@@ -262,7 +262,6 @@ class WHvPartition(object):
         )
 
         if TranslationResult.value == whv.WHvTranslateGvaResultSuccess and Hva is not None:
-            print Hva
             HowManyLeft = 0x1000 - (Hva & 0xfff)
             HowMany = min(HowManyLeft, 16)
             Code = ct.string_at(Hva, HowMany).encode('hex')
