@@ -136,13 +136,17 @@ class WHvPartition(object):
 
         assert Success, 'WHvSetVirtualProcessorRegisters failed with: %s.' % hvplat.WHvReturn(Ret)
 
-    def SetRip(self, VpIndex, Rip):
-        '''Set the @rip register of a VP.'''
+    def SetRegister(self, VpIndex, Register, Value):
+        '''Set a register of a VP.'''
         return self.SetRegisters(
             VpIndex, {
-                hvplat.Rip: Rip
+                Register : Value
             }
         )
+
+    def SetRip(self, VpIndex, Rip):
+        '''Set the @rip register of a VP.'''
+        return self.SetRegister(VpIndex, hvplat.Rip, Rip)
 
     def GetRegisters(self, VpIndex, Registers, Reg64 = False):
         '''Get registers of a VP.'''

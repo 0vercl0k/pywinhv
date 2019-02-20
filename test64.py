@@ -765,11 +765,7 @@ class FeatureTests(unittest.TestCase):
         )
 
         # Successfully caught the first int3 interruption, stepping over it.
-        self.Partition.SetRegisters(
-            0, {
-                hv.Rip : Rip + len(Int3)
-            }
-        )
+        self.Partition.SetRip(0, Rip + len(Int3))
 
         ExitContext, _ = self.Partition.RunVp(0)
         Rip, Rax = self.Partition.GetRegisters64(
@@ -851,11 +847,7 @@ class FeatureTests(unittest.TestCase):
             hv.Rax
         )
 
-        self.Partition.SetRegisters(
-            0, {
-                hv.Rax : 0xaaaaaaaaaaaaaaaa
-            }
-        )
+        self.Partition.SetRegister(0, hv.Rax, 0xaaaaaaaaaaaaaaaa)
 
         self.Partition.Restore(Snapshot)
         Rax = self.Partition.GetRegister64(
