@@ -308,10 +308,13 @@ class WHvPartition(object):
         )
 
         assert Success, 'WHvMapGpaRange failed with: %s.' % hvplat.WHvReturn(Ret)
+
+        # Break the range into a series of pages for the translation table.
         for Idx in range(SizeInBytes / 0x1000):
             CurGpa = Gpa + (Idx * 0x1000)
             CurHva = Hva + (Idx * 0x1000)
             self.TranslationTable[CurGpa] = CurHva
+
         return (Hva, Gpa, SizeInBytes)
 
     def MapGpaRange(self, Gpa, Buffer, Flags):
