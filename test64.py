@@ -22,10 +22,10 @@ class PackedPhysicalMemory(object):
     def __init__(self, BaseGpa = 0):
         self.Gpa = 0
 
-    def GetGpa(self):
+    def GetGpa(self, Pages = 1):
         '''Get the next available GPA address.'''
         Gpa = self.Gpa
-        self.Gpa += 0x1000
+        self.Gpa += (0x1000 * Pages)
         return Gpa
 
 def CreatePartition(Pages, PackedSpacePolicy, TebGva):
@@ -166,6 +166,24 @@ class FeatureTests(unittest.TestCase):
     def setUp(self):
         '''Restore the context everytime before executing a test.'''
         self.Partition.Restore(self.Snapshot)
+
+    def test_mapregion_translategpa(self):
+        '''Map a GPA range bigger than 0x1000 and ensure the GPA->HVA translation works
+        on every page of the region.'''
+        RegionSize = 5
+        RegionGpa = self.Policy.GetGpa(5)
+        HvaBase, SizeInBytes = self.Partition.MapGpaRange(
+            RegionGpa,
+            'hello',
+            'r'
+        )
+
+        for Offset in range(0, SizeInBytes, 0x1000):
+            CurHva = self.Partition.TranslateGpa(RegionGpa + Offset)
+            self.assertEqual(
+                CurHva, HvaBase + Offset,
+                'The two HVAs should match.'
+            )
 
     def test_translate_gva_with_permcheck_kern(self):
         '''Translate a GVA->GPA and validate page permissions against a kernl page.'''
@@ -805,9 +823,9 @@ class FeatureTests(unittest.TestCase):
         )
 
         PageCount = 24
-        self.assertEqual(
+        self.assertGreaterEqual(
             MemoryCounters.Mapped4KPageCount, PageCount,
-            'There should be only %d pages.' % PageCount
+            'There should be only > %d pages.' % PageCount
         )
 
     def test_vp_counters(self):
