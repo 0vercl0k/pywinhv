@@ -265,12 +265,10 @@ class FeatureTests(unittest.TestCase):
         Snapshot = self.Partition.Save()
 
         self.assertTrue(self.Partition.WriteGva(
-                0,
-                self.ReadOnlyGva,
-                '\xAA'
-            ),
-            'The write should succeed.'
-        )
+            0,
+            self.ReadOnlyGva,
+            '\xAA'
+        ))
 
         self.Partition.Restore(Snapshot)
 
@@ -288,12 +286,10 @@ class FeatureTests(unittest.TestCase):
         # Restore the orginal byte as it will never get its original value back
         # otherwise.
         self.assertTrue(self.Partition.WriteGva(
-                0,
-                self.ReadOnlyGva,
-                ByteSaved
-            ),
-            'The write should succeed.'
-        )
+            0,
+            self.ReadOnlyGva,
+            ByteSaved
+        ))
 
     def test_mapregion_translategpa(self):
         '''Map a GPA range bigger than 0x1000 and ensure the GPA->HVA translation works
@@ -659,19 +655,12 @@ class FeatureTests(unittest.TestCase):
 
     def test_execute_readonly(self):
         '''Execute read-only memory.'''
-        TranslationResult, Hva = self.Partition.TranslateGvaToHva(
-            0,
-            self.ReadOnlyGva
-        )
-
-        self.assertEqual(
-            TranslationResult.value,
-            hv.WHvTranslateGvaResultSuccess,
-            'The GVA->HVA translation should be a success.'
-        )
-
         Content = IncRax + Int3
-        ct.memmove(Hva, Content, len(Content))
+        self.assertTrue(self.Partition.WriteGva(
+            0,
+            self.ReadOnlyGva,
+            Content
+        ))
 
         self.Partition.SetRip(
             0,
@@ -699,23 +688,21 @@ class FeatureTests(unittest.TestCase):
 
     def test_write_to_readonly(self):
         '''Write to read-only memory.'''
-        TranslationResult, Hva = self.Partition.TranslateGvaToHva(
-            0,
-            self.ReadOnlyGva
-        )
-
-        self.assertEqual(
-            TranslationResult.value,
-            hv.WHvTranslateGvaResultSuccess,
-            'The GVA->HVA translation should be a success.'
-        )
-
         Value = 0xdeadbeefbaadc0de
         Content = struct.pack('<Q', Value)
-        ct.memmove(Hva, Content, len(Content))
+        self.assertTrue(self.Partition.WriteGva(
+            0,
+            self.ReadOnlyGva,
+            Content
+        ))
 
         Code = WriteMemory64(self.ReadOnlyGva, Value) + Int3
-        ct.memmove(self.CodeHva, Code, len(Code))
+        self.assertTrue(self.Partition.WriteGva(
+            0,
+            self.CodeGva,
+            Code
+        ))
+
         self.Partition.SetRip(
             0,
             self.CodeGva
@@ -741,23 +728,21 @@ class FeatureTests(unittest.TestCase):
 
     def test_read_from_readonly(self):
         '''Read from read-only memory.'''
-        TranslationResult, Hva = self.Partition.TranslateGvaToHva(
-            0,
-            self.ReadOnlyGva
-        )
-
-        self.assertEqual(
-            TranslationResult.value,
-            hv.WHvTranslateGvaResultSuccess,
-            'The GVA->HVA translation should be a success.'
-        )
-
         Value = 0xdeadbeefbaadc0de
         Content = struct.pack('<Q', Value)
-        ct.memmove(Hva, Content, len(Content))
+        self.assertTrue(self.Partition.WriteGva(
+            0,
+            self.ReadOnlyGva,
+            Content
+        ))
 
         Code = ReadMemory64(self.ReadOnlyGva) + Int3
-        ct.memmove(self.CodeHva, Code, len(Code))
+        self.assertTrue(self.Partition.WriteGva(
+            0,
+            self.CodeGva,
+            Code
+        ))
+
         self.Partition.SetRip(
             0,
             self.CodeGva
@@ -776,20 +761,13 @@ class FeatureTests(unittest.TestCase):
 
     def test_read_from_gs(self):
         '''Read memory from the GS segment.'''
-        TranslationResult, TebHva = self.Partition.TranslateGvaToHva(
-            0,
-            self.TebGva
-        )
-
-        self.assertEqual(
-            TranslationResult.value,
-            hv.WHvTranslateGvaResultSuccess,
-            'The GVA->HVA translation should be a success.'
-        )
-
         TebValue = 0xdeadbeefbaadc0de
         TebContent = struct.pack('<Q', TebValue)
-        ct.memmove(TebHva, TebContent, len(TebContent))
+        self.assertTrue(self.Partition.WriteGva(
+            0,
+            self.TebGva,
+            TebContent
+        ))
 
         Code = LoadGsInRax + Int3
         ct.memmove(self.CodeHva, Code, len(Code))
