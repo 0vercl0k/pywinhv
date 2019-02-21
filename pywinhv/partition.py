@@ -5,6 +5,7 @@ import ctypes as ct
 import utils
 import sys
 from ctypes.wintypes import BOOL, LPVOID, DWORD, c_size_t as SIZE_T
+from collections import namedtuple
 
 ct.windll.kernel32.VirtualAlloc.argtypes = (LPVOID, SIZE_T, DWORD, DWORD)
 ct.windll.kernel32.VirtualAlloc.restype = LPVOID
@@ -17,6 +18,12 @@ VirtualFree = ct.windll.kernel32.VirtualFree
 MEM_COMMIT = 0x00001000
 MEM_RESERVE = 0x00002000
 PAGE_READWRITE = 0x04
+
+TranslationTableEntry_t = namedtuple(
+    'TranslationTableEntry_t', (
+        'Gva', 'Hva', 'Flags'
+    )
+)
 
 class WHvPartition(object):
     '''This is the Python abstraction for a Partition. The class
@@ -316,7 +323,9 @@ class WHvPartition(object):
         for Idx in range(SizeInBytes / 0x1000):
             CurGpa = Gpa + (Idx * 0x1000)
             CurHva = Hva + (Idx * 0x1000)
-            self.TranslationTable[CurGpa] = CurHva
+            self.TranslationTable[CurGpa] = TranslationTableEntry_t(
+                CurGpa, CurHva, Flags
+            )
 
         return (Hva, Gpa, SizeInBytes)
 
@@ -394,9 +403,9 @@ class WHvPartition(object):
         '''Translate a GPA to an HVA. This is only possible because we
         keep track of every call made to map GPA ranges and store the HVA/GPA.'''
         GpaAligned, Offset = utils.SplitAddress(Gpa)
-        Hva = self.TranslationTable.get(GpaAligned, None)
-        if Hva is not None:
-            return Hva + Offset
+        Entry = self.TranslationTable.get(GpaAligned, None)
+        if Entry is not None:
+            return Entry.Hva + Offset
 
         return None
 
@@ -509,6 +518,7 @@ class WHvPartition(object):
         Snapshot = {
             'VP' : [],
             'Mem' : [],
+            'Table' : self.GetTranslationTable()
         }
 
         # XXX: SpecCtrl & cie, ensure they are available in the VP.
@@ -520,10 +530,14 @@ class WHvPartition(object):
 
             Snapshot['VP'].append((VpIndex, Registers))
 
-        for Gpa, Hva in self.TranslationTable.iteritems():
-            Page = ct.string_at(Hva, 0x1000)
+        for Gpa, Entry in self.TranslationTable.iteritems():
+            # Don't save pages that are not writeable.
+            if 'w' not in Entry.Flags:
+                continue
+
+            PageContent = ct.string_at(Entry.Hva, 0x1000)
             Snapshot['Mem'].append((
-                Gpa, Hva, Page
+                Entry.Hva, PageContent
             ))
 
         self.ClearGpaRangeDirtyPages(
@@ -544,11 +558,13 @@ class WHvPartition(object):
                 dict(zip(hvplat.AllRegisters, Registers))
             )
 
-        # XXX: Don't restore read-only pages?
-        self.TranslationTable = {}
-        for Gpa, Hva, Page in Snapshot['Mem']:
-            ct.memmove(Hva, Page, 0x1000)
-            self.TranslationTable[Gpa] = Hva
+        # Force a copy of the table.
+        self.TranslationTable = dict(Snapshot['Table'])
+
+        # XXX: Only restore dirty pages?
+        # Restore the memory that has been saved off.
+        for Hva, PageContent in Snapshot['Mem']:
+            ct.memmove(Hva, PageContent, 0x1000)
 
         self.ClearGpaRangeDirtyPages(
             0,
@@ -560,6 +576,66 @@ class WHvPartition(object):
     def GetTranslationTable(self):
         '''Return a copy of the translation table.'''
         return dict(self.TranslationTable)
+
+    def ReadGva(self, VpIndex, Gva, Size):
+        '''Read directly from a GVA.'''
+        Content = ''
+        for Offset in range(0, Size, 0x1000):
+            TranslationResult, Hva = self.TranslateGvaToHva(
+                VpIndex,
+                Gva + Offset
+            )
+
+            if TranslationResult.value != whv.WHvTranslateGvaResultSuccess or Hva is None:
+                return None
+
+            # Compute how many more bytes we need to dump.
+            HowManyLeft = Size - Offset
+            # We have two cases: either this is not the last page read, in
+            # which case HowManyLeft is bigger than a page and HowMany is 0x1000.
+            # Either this is the last iteration and the total size minus the current
+            # offset gives us the amount of data to read.
+            HowMany = min(
+                HowManyLeft,
+                0x1000
+            )
+
+            print hex(Hva), HowMany
+            Content += ct.string_at(Hva, HowMany)
+
+        return Content
+
+    def WriteGva(self, VpIndex, Gva, Content):
+        '''Write directly to a GVA.'''
+        Size = len(Content)
+        Hvas = []
+        # First ensure that all the translation works out.
+        for Offset in range(0, Size, 0x1000):
+            TranslationResult, Hva = self.TranslateGvaToHva(
+                VpIndex,
+                Gva + Offset
+            )
+
+            if TranslationResult.value != whv.WHvTranslateGvaResultSuccess or Hva is None:
+                return False
+
+            Hvas.append(Hva)
+
+        # Once we verified all the pages in the region exist, let's
+        # write the data.
+        for Hva in Hvas:
+            # Compute how many more bytes we need to dump.
+            HowManyLeft = Size - Offset
+            HowMany = min(
+                HowManyLeft,
+                0x1000
+            )
+
+            # Write the content to the HVA and slice Content.
+            ct.memmove(Hva, Content, HowMany)
+            Content = Content[0x1000:]
+
+        return True
 
 def main(argc, argv):
     return 0

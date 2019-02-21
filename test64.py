@@ -167,6 +167,38 @@ class FeatureTests(unittest.TestCase):
         '''Restore the context everytime before executing a test.'''
         self.Partition.Restore(self.Snapshot)
 
+    def test_snapshot_only_writeable(self):
+        '''Ensure that the snapshot only restores / track pages that are writeable.'''
+        ByteSaved = self.Partition.ReadGva(
+            0,
+            self.ReadOnlyGva,
+            1
+        )
+
+        self.assertIsNotNone(ByteSaved, 'The ByteSaved should not be None.')
+        Snapshot = self.Partition.Save()
+
+        self.assertTrue(self.Partition.WriteGva(
+                0,
+                self.ReadOnlyGva,
+                '\xAA'
+            ),
+            'The write should succeed.'
+        )
+
+        self.Partition.Restore(Snapshot)
+
+        ByteRead = self.Partition.ReadGva(
+            0,
+            self.ReadOnlyGva,
+            1
+        )
+
+        self.assertNotEqual(
+            ByteSaved, ByteRead,
+            'The two bytes should match up.'
+        )
+
     def test_mapregion_translategpa(self):
         '''Map a GPA range bigger than 0x1000 and ensure the GPA->HVA translation works
         on every page of the region.'''
