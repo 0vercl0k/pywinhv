@@ -3,7 +3,7 @@ import pywinhv as hv
 import sys
 import struct
 import unittest
-from ctypes import memmove
+import ctypes as ct
 
 # mov rax, Address ; mov rbx, Value ; mov [rax], rbx
 WriteMemory64 = lambda Address, Value: '\x48\xb8' + struct.pack('<Q', Address) + '\x48\xbb' + struct.pack('<Q', Value) + '\x48\x89\x18'
@@ -136,6 +136,8 @@ class FeatureTests(unittest.TestCase):
         cls.ReadWriteGva = 0x00007fffb8c07000
         cls.ReadWriteExecuteGva = 0x00007fffb8c08000
         cls.KernelPageGva = 0xfffff80178e05000
+        cls.Page0Gva = 0x0007ff60cf10000
+        cls.Page1Gva = 0x0007ff60cf11000
         cls.Pages = [
             (cls.TebGva, 'rw'),
             (cls.CodeGva, 'rx'),
@@ -150,6 +152,10 @@ class FeatureTests(unittest.TestCase):
             (0x00007ff96a361000, 'r'),
             # PML4E=255, PDPTE=309, PDE=172, PTE=353
             (0x0000014d55961000, 'r'),
+            # The goal with these is to have 2 contiguous pages in the virtual
+            # space but not in the host virtual space.
+            (cls.Page0Gva, 'r'),
+            (cls.Page1Gva, 'r')
         ]
 
         cls.Policy = PackedPhysicalMemory()
@@ -166,6 +172,86 @@ class FeatureTests(unittest.TestCase):
     def setUp(self):
         '''Restore the context everytime before executing a test.'''
         self.Partition.Restore(self.Snapshot)
+
+    def test_readwrite_unmapped(self):
+        '''Read from / to unmapped GVA.'''
+        self.assertFalse(self.Partition.WriteGva(
+                0,
+                0,
+                'hello'
+            ), 'The write to unmapped memory should fail.'
+        )
+
+        self.assertIsNone(self.Partition.ReadGva(
+                0,
+                0,
+                0x1000
+            ), 'The read to unmapped memory should fail.'
+        )
+
+    def test_writegva_cross_pages(self):
+        '''Read from and write to GVA space across two pages that are not contiguous
+        in the host virtual space.'''
+        TranslationResult, Hva0 = self.Partition.TranslateGvaToHva(
+            0,
+            self.Page0Gva
+        )
+
+        self.assertEqual(
+            TranslationResult.value,
+            hv.WHvTranslateGvaResultSuccess,
+            'The translation should succeed.'
+        )
+
+        self.assertIsNotNone(Hva0, 'The GVA->HVA translation should succeed.')
+
+        TranslationResult, Hva1 = self.Partition.TranslateGvaToHva(
+            0,
+            self.Page1Gva
+        )
+
+        self.assertEqual(
+            TranslationResult.value,
+            hv.WHvTranslateGvaResultSuccess,
+            'The translation should succeed.'
+        )
+
+        self.assertIsNotNone(Hva1, 'The GVA->HVA translation should succeed.')
+
+        self.assertNotEqual(
+            abs(Hva1 - Hva0), 0x1000,
+            'The two pages should not be contiguous in host virtual space.'
+        )
+
+        Content = 'hello friends!'
+        EndOffset = 0xff8
+        Address = self.Page0Gva + EndOffset
+        self.assertTrue(self.Partition.WriteGva(
+            0,
+            Address,
+            Content
+        ))
+
+        # The first 8 bytes are at the end of the first page.
+        First = ct.string_at(Hva0 + EndOffset, 8)
+        # The last 6 bytes are at the beginning of the second page.
+        Second = ct.string_at(Hva1, 6)
+
+        self.assertEqual(
+            First + Second, Content,
+            'The first and second bit should match the content.'
+        )
+
+        ReadContent = self.Partition.ReadGva(
+            0,
+            self.Page0Gva + EndOffset,
+            len(Content)
+        )
+
+        self.assertEqual(
+            ReadContent, Content,
+            'The content should match.'
+        )
 
     def test_snapshot_only_writeable(self):
         '''Ensure that the snapshot only restores / track pages that are writeable.'''
@@ -197,6 +283,16 @@ class FeatureTests(unittest.TestCase):
         self.assertNotEqual(
             ByteSaved, ByteRead,
             'The two bytes should match up.'
+        )
+
+        # Restore the orginal byte as it will never get its original value back
+        # otherwise.
+        self.assertTrue(self.Partition.WriteGva(
+                0,
+                self.ReadOnlyGva,
+                ByteSaved
+            ),
+            'The write should succeed.'
         )
 
     def test_mapregion_translategpa(self):
@@ -421,7 +517,7 @@ class FeatureTests(unittest.TestCase):
     def test_clear_dirty_pages(self):
         '''Clear the dirty bits of the pages.'''
         Code = WriteMemory64(self.TebGva, 1) + Int3
-        memmove(self.CodeHva, Code, len(Code))
+        ct.memmove(self.CodeHva, Code, len(Code))
         self.Partition.SetRip(
             0,
             self.CodeGva
@@ -482,7 +578,7 @@ class FeatureTests(unittest.TestCase):
         '''Read from a non canonical page.'''
         NonCanonicalGva = 0xdeadbeefbaadc0de
         Code = ReadMemory64(NonCanonicalGva)
-        memmove(self.CodeHva, Code, len(Code))
+        ct.memmove(self.CodeHva, Code, len(Code))
         self.Partition.SetRip(
             0,
             self.CodeGva
@@ -508,7 +604,7 @@ class FeatureTests(unittest.TestCase):
         '''Read from a non-present page.'''
         NonPresentGva = 1337
         Code = ReadMemory64(NonPresentGva)
-        memmove(self.CodeHva, Code, len(Code))
+        ct.memmove(self.CodeHva, Code, len(Code))
         self.Partition.SetRip(
             0,
             self.CodeGva
@@ -536,7 +632,7 @@ class FeatureTests(unittest.TestCase):
     def test_read_from_supervisor(self):
         '''Read from supervisor memory.'''
         Code = ReadMemory64(self.KernelPageGva) + Int3
-        memmove(self.CodeHva, Code, len(Code))
+        ct.memmove(self.CodeHva, Code, len(Code))
         self.Partition.SetRip(
             0,
             self.CodeGva
@@ -575,7 +671,7 @@ class FeatureTests(unittest.TestCase):
         )
 
         Content = IncRax + Int3
-        memmove(Hva, Content, len(Content))
+        ct.memmove(Hva, Content, len(Content))
 
         self.Partition.SetRip(
             0,
@@ -616,10 +712,10 @@ class FeatureTests(unittest.TestCase):
 
         Value = 0xdeadbeefbaadc0de
         Content = struct.pack('<Q', Value)
-        memmove(Hva, Content, len(Content))
+        ct.memmove(Hva, Content, len(Content))
 
         Code = WriteMemory64(self.ReadOnlyGva, Value) + Int3
-        memmove(self.CodeHva, Code, len(Code))
+        ct.memmove(self.CodeHva, Code, len(Code))
         self.Partition.SetRip(
             0,
             self.CodeGva
@@ -658,10 +754,10 @@ class FeatureTests(unittest.TestCase):
 
         Value = 0xdeadbeefbaadc0de
         Content = struct.pack('<Q', Value)
-        memmove(Hva, Content, len(Content))
+        ct.memmove(Hva, Content, len(Content))
 
         Code = ReadMemory64(self.ReadOnlyGva) + Int3
-        memmove(self.CodeHva, Code, len(Code))
+        ct.memmove(self.CodeHva, Code, len(Code))
         self.Partition.SetRip(
             0,
             self.CodeGva
@@ -693,10 +789,10 @@ class FeatureTests(unittest.TestCase):
 
         TebValue = 0xdeadbeefbaadc0de
         TebContent = struct.pack('<Q', TebValue)
-        memmove(TebHva, TebContent, len(TebContent))
+        ct.memmove(TebHva, TebContent, len(TebContent))
 
         Code = LoadGsInRax + Int3
-        memmove(self.CodeHva, Code, len(Code))
+        ct.memmove(self.CodeHva, Code, len(Code))
         self.Partition.SetRip(
             0,
             self.CodeGva
@@ -755,7 +851,7 @@ class FeatureTests(unittest.TestCase):
         # int3. This is the second vmexit we should get.
         Code += Int3
 
-        memmove(self.CodeHva, Code, len(Code))
+        ct.memmove(self.CodeHva, Code, len(Code))
         self.Partition.SetRip(
             0,
             CodeGva
@@ -906,16 +1002,16 @@ class FeatureTests(unittest.TestCase):
         )
 
         TebContent = '\xaa' * 0x1000
-        memmove(TebHva, TebContent, len(TebContent))
+        ct.memmove(TebHva, TebContent, len(TebContent))
 
         Snapshot = self.Partition.Save()
         TebContent = '\xbb' * 0x1000
-        memmove(TebHva, TebContent, len(TebContent))
+        ct.memmove(TebHva, TebContent, len(TebContent))
 
         self.Partition.Restore(Snapshot)
 
         Code = ReadMemory64(self.TebGva) + Int3
-        memmove(self.CodeHva, Code, len(Code))
+        ct.memmove(self.CodeHva, Code, len(Code))
         self.Partition.SetRip(
             0,
             self.CodeGva
@@ -1001,7 +1097,7 @@ class FeatureTests(unittest.TestCase):
 
         # Dirty the TEB page.
         Code = WriteMemory64(self.TebGva, 1) + Int3
-        memmove(self.CodeHva, Code, len(Code))
+        ct.memmove(self.CodeHva, Code, len(Code))
         self.Partition.SetRip(
             0,
             self.CodeGva
@@ -1030,7 +1126,7 @@ class FeatureTests(unittest.TestCase):
 
         # Dirty the TEB page.
         Code = WriteMemory64(self.TebGva, 1) + Int3
-        memmove(self.CodeHva, Code, len(Code))
+        ct.memmove(self.CodeHva, Code, len(Code))
         self.Partition.SetRip(
             0,
             self.CodeGva

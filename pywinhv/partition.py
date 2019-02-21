@@ -580,28 +580,31 @@ class WHvPartition(object):
     def ReadGva(self, VpIndex, Gva, Size):
         '''Read directly from a GVA.'''
         Content = ''
-        for Offset in range(0, Size, 0x1000):
+        while Size > 0:
             TranslationResult, Hva = self.TranslateGvaToHva(
                 VpIndex,
-                Gva + Offset
+                Gva
             )
 
             if TranslationResult.value != whv.WHvTranslateGvaResultSuccess or Hva is None:
                 return None
 
-            # Compute how many more bytes we need to dump.
-            HowManyLeft = Size - Offset
-            # We have two cases: either this is not the last page read, in
-            # which case HowManyLeft is bigger than a page and HowMany is 0x1000.
-            # Either this is the last iteration and the total size minus the current
-            # offset gives us the amount of data to read.
+            # Compute how many bytes we can write in this page.
+            _, GvaOffset = utils.SplitAddress(Gva)
+            HowManyBytesWriteable = 0x1000 - GvaOffset
+            # Compute the amount of byte we actually want to write.
+            # If we have more content than what's left in this page, we fill
+            # the page and move the cursor forward.
+            # If we have more space than content, then we just write the rest of the
+            # content we have and we are done.
             HowMany = min(
-                HowManyLeft,
-                0x1000
+                HowManyBytesWriteable,
+                Size
             )
 
-            print hex(Hva), HowMany
             Content += ct.string_at(Hva, HowMany)
+            Size -= HowMany
+            Gva += HowMany
 
         return Content
 
@@ -609,31 +612,41 @@ class WHvPartition(object):
         '''Write directly to a GVA.'''
         Size = len(Content)
         Hvas = []
-        # First ensure that all the translation works out.
-        for Offset in range(0, Size, 0x1000):
+        # First step is to ensure that all the translation works out. We populate a list
+        # of work to do if everything goes well.
+        while Size > 0:
             TranslationResult, Hva = self.TranslateGvaToHva(
                 VpIndex,
-                Gva + Offset
+                Gva
             )
 
             if TranslationResult.value != whv.WHvTranslateGvaResultSuccess or Hva is None:
                 return False
 
-            Hvas.append(Hva)
+
+            # Compute how many bytes we can write in this page.
+            _, GvaOffset = utils.SplitAddress(Gva)
+            HowManyBytesWriteable = 0x1000 - GvaOffset
+            # Compute the amount of byte we actually want to write.
+            # If we have more content than what's left in this page, we fill
+            # the page and move the cursor forward.
+            # If we have more space than content, then we just write the rest of the
+            # content we have and we are done.
+            HowMany = min(
+                HowManyBytesWriteable,
+                Size
+            )
+
+            Hvas.append((Hva, HowMany))
+            Size -= HowMany
+            Gva += HowMany
 
         # Once we verified all the pages in the region exist, let's
         # write the data.
-        for Hva in Hvas:
-            # Compute how many more bytes we need to dump.
-            HowManyLeft = Size - Offset
-            HowMany = min(
-                HowManyLeft,
-                0x1000
-            )
-
+        for Hva, HowMany in Hvas:
             # Write the content to the HVA and slice Content.
             ct.memmove(Hva, Content, HowMany)
-            Content = Content[0x1000:]
+            Content = Content[HowMany:]
 
         return True
 
