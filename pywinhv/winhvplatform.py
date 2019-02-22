@@ -590,11 +590,12 @@ def WHvQueryGpaRangeDirtyBitmap(Partition, GuestAddress, RangeSizeInBytes, Clear
     assert (GuestAddress & 0xfff) == 0, 'GuestAddress(%x) needs to be page aligned.' % GuestAddress
     assert (RangeSizeInBytes & 0xfff) == 0, 'RangeSizeInBytes(%x) needs to be page aligned.' % RangeSizeInBytes
 
-    # One bit per page.
-    NumberPages = (RangeSizeInBytes + 1) / 0x1000
+    # First let's get the number of pages that this region describes.
+    NumberPages = RangeSizeInBytes / 0x1000
+    # Then we get the number of UINT64 we need to have one bit per page.
     NumberU64 = NumberPages / 64
-    if NumberU64 == 0:
-        NumberU64 = 1
+    # We add one to have enough space (imagine we have 63 pages, or 129 pages).
+    NumberU64 += 1
 
     if Clear:
         NumberU64 = 0

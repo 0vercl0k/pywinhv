@@ -154,8 +154,8 @@ class FeatureTests(unittest.TestCase):
             (0x0000014d55961000, 'r'),
             # The goal with these is to have 2 contiguous pages in the virtual
             # space but not in the host virtual space.
-            (cls.Page0Gva, 'r'),
-            (cls.Page1Gva, 'r')
+            (cls.Page0Gva, 'rw'),
+            (cls.Page1Gva, 'rw')
         ]
 
         cls.Policy = PackedPhysicalMemory()
@@ -267,7 +267,8 @@ class FeatureTests(unittest.TestCase):
         self.assertTrue(self.Partition.WriteGva(
             0,
             self.ReadOnlyGva,
-            '\xAA'
+            '\xAA',
+            Force = True
         ))
 
         self.Partition.Restore(Snapshot)
@@ -288,7 +289,8 @@ class FeatureTests(unittest.TestCase):
         self.assertTrue(self.Partition.WriteGva(
             0,
             self.ReadOnlyGva,
-            ByteSaved
+            ByteSaved,
+            Force = True
         ))
 
     def test_mapregion_translategpa(self):
@@ -659,7 +661,8 @@ class FeatureTests(unittest.TestCase):
         self.assertTrue(self.Partition.WriteGva(
             0,
             self.ReadOnlyGva,
-            Content
+            Content,
+            Force = True
         ))
 
         self.Partition.SetRip(
@@ -693,14 +696,16 @@ class FeatureTests(unittest.TestCase):
         self.assertTrue(self.Partition.WriteGva(
             0,
             self.ReadOnlyGva,
-            Content
+            Content,
+            Force = True
         ))
 
         Code = WriteMemory64(self.ReadOnlyGva, Value) + Int3
         self.assertTrue(self.Partition.WriteGva(
             0,
             self.CodeGva,
-            Code
+            Code,
+            Force = True
         ))
 
         self.Partition.SetRip(
@@ -733,14 +738,16 @@ class FeatureTests(unittest.TestCase):
         self.assertTrue(self.Partition.WriteGva(
             0,
             self.ReadOnlyGva,
-            Content
+            Content,
+            Force = True
         ))
 
         Code = ReadMemory64(self.ReadOnlyGva) + Int3
         self.assertTrue(self.Partition.WriteGva(
             0,
             self.CodeGva,
-            Code
+            Code,
+            Force = True
         ))
 
         self.Partition.SetRip(
@@ -967,24 +974,32 @@ class FeatureTests(unittest.TestCase):
         )
 
     def test_save_restore_memory(self):
-        '''Take a snapshot modify memory and resore it.'''
-        TranslationResult, TebHva = self.Partition.TranslateGvaToHva(
+        '''Take a snapshot modify memory and restore it.'''
+        TebContent = '\xaa' * 8
+        self.assertTrue(self.Partition.WriteGva(
             0,
-            self.TebGva
-        )
-
-        self.assertEqual(
-            TranslationResult.value,
-            hv.WHvTranslateGvaResultSuccess,
-            'The GVA->HVA translation should be a success.'
-        )
-
-        TebContent = '\xaa' * 0x1000
-        ct.memmove(TebHva, TebContent, len(TebContent))
+            self.TebGva,
+            TebContent
+        ))
 
         Snapshot = self.Partition.Save()
-        TebContent = '\xbb' * 0x1000
-        ct.memmove(TebHva, TebContent, len(TebContent))
+
+        Code = WriteMemory64(self.TebGva, 0xbbbbbbbbbbbbbbbb) + Int3
+        ct.memmove(self.CodeHva, Code, len(Code))
+
+        self.Partition.SetRip(
+            0,
+            self.CodeGva
+        )
+
+        self.Partition.RunVp(0)
+        self.assertEqual(self.Partition.ReadGva(
+                0,
+                self.TebGva,
+                8
+            ), '\xbb' * 8,
+            'The TEB is expected to contain bbs.'
+        )
 
         self.Partition.Restore(Snapshot)
 

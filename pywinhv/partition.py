@@ -517,7 +517,7 @@ class WHvPartition(object):
         memory space. It can be restored with Restore.'''
         Snapshot = {
             'VP' : [],
-            'Mem' : [],
+            'Mem' : {},
             'Table' : self.GetTranslationTable()
         }
 
@@ -536,9 +536,9 @@ class WHvPartition(object):
                 continue
 
             PageContent = ct.string_at(Entry.Hva, 0x1000)
-            Snapshot['Mem'].append((
+            Snapshot['Mem'][Gpa] = (
                 Entry.Hva, PageContent
-            ))
+            )
 
         self.ClearGpaRangeDirtyPages(
             0,
@@ -561,10 +561,23 @@ class WHvPartition(object):
         # Force a copy of the table.
         self.TranslationTable = dict(Snapshot['Table'])
 
-        # XXX: Only restore dirty pages?
-        # Restore the memory that has been saved off.
-        for Hva, PageContent in Snapshot['Mem']:
-            ct.memmove(Hva, PageContent, 0x1000)
+        if False:
+            # XXX: It's sound to be slower..?
+            DirtyGpas = self.QueryGpaRangeDirtyPages(
+                0,
+                # XXX: This assumes that the physical address space is packed and that
+                # there is no hole.
+               len(self.TranslationTable) * 0x1000
+            )
+
+            # Restore the dirty memory that has been saved off.
+            for DirtyGpa in DirtyGpas:
+                Hva, PageContent = Snapshot['Mem'].get(DirtyGpa)
+                ct.memmove(Hva, PageContent, 0x1000)
+        else:
+            # Restore the dirty memory that has been saved off.
+            for Hva, PageContent in Snapshot['Mem'].itervalues():
+                ct.memmove(Hva, PageContent, 0x1000)
 
         self.ClearGpaRangeDirtyPages(
             0,
@@ -583,7 +596,8 @@ class WHvPartition(object):
         while Size > 0:
             TranslationResult, Hva = self.TranslateGvaToHva(
                 VpIndex,
-                Gva
+                Gva,
+                'r'
             )
 
             if TranslationResult.value != whv.WHvTranslateGvaResultSuccess or Hva is None:
@@ -608,16 +622,25 @@ class WHvPartition(object):
 
         return Content
 
-    def WriteGva(self, VpIndex, Gva, Content):
+    def WriteGva(self, VpIndex, Gva, Content, Force = False):
         '''Write directly to a GVA.'''
         Size = len(Content)
         Hvas = []
+        Flags = 'w'
+
+        # If the user asks us to not do permission checking then we won't do any.
+        if Force:
+            # We don't use the 'e' flag for privilege exemption because it still
+            # will not allow us to write in read-only memory for example.
+            Flags = None
+
         # First step is to ensure that all the translation works out. We populate a list
         # of work to do if everything goes well.
         while Size > 0:
             TranslationResult, Hva = self.TranslateGvaToHva(
                 VpIndex,
-                Gva
+                Gva,
+                Flags
             )
 
             if TranslationResult.value != whv.WHvTranslateGvaResultSuccess or Hva is None:
