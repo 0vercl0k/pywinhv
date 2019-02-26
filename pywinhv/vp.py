@@ -42,8 +42,13 @@ class WHvVirtualProcessor(object):
             Rip
         )
 
-    def GetRegisters(self, Registers, Reg64 = False):
+    def GetRegisters(self, *Registers):
         '''Get registers of a VP.'''
+        if isinstance(Registers[0], (tuple, list)):
+            # This is probably the case where GetRegisters is invoked with an
+            # array directly. It is useful at times, so we handle this case.
+            Registers = Registers[0]
+
         Success, Registers, Ret = hvplat.WHvGetVirtualProcessorRegisters(
             self.Handle,
             self.Index,
@@ -51,27 +56,21 @@ class WHvVirtualProcessor(object):
         )
 
         assert Success, 'GetRegisters failed with: %s.' % hvplat.WHvReturn(Ret)
+        return Registers
 
-        if Reg64:
-            Registers = map(
-                lambda R: R.Reg64,
-                Registers
-            )
+    def GetRegisters64(self, *Registers):
+        '''Get VP registers and return the .Reg64 part.'''
+        Registers = self.GetRegisters(*Registers)
+        Registers = map(
+            lambda R: R.Reg64,
+            Registers
+        )
 
         return Registers
 
-    def GetRegisters64(self, Registers):
-        '''Get VP registers and return the .Reg64 part.'''
-        return self.GetRegisters(
-            Registers,
-            Reg64 = True
-        )
-
     def GetRegister(self, Register):
         '''Get a single VP register.'''
-        return self.GetRegisters(
-            (Register, )
-        )[0]
+        return self.GetRegisters(Register)[0]
 
     def GetRegister64(self, Register):
         '''Get a VP register.'''
@@ -79,17 +78,17 @@ class WHvVirtualProcessor(object):
 
     def GetRip(self):
         '''Get the @rip register of a VP.'''
-        return self.GetRegisters64((hvplat.Rip, ))[0]
+        return self.GetRegister64(hvplat.Rip)
 
     def DumpRegisters(self):
         '''Dump the register of a VP.'''
-        R = self.GetRegisters([
+        R = self.GetRegisters(
             hvplat.Rax, hvplat.Rbx, hvplat.Rcx, hvplat.Rdx, hvplat.Rsi, hvplat.Rdi,
             hvplat.Rip, hvplat.Rsp, hvplat.Rbp, hvplat.R8, hvplat.R9, hvplat.R10,
             hvplat.R11, hvplat.R12, hvplat.R13, hvplat.R14, hvplat.R15,
             hvplat.Cs, hvplat.Ss, hvplat.Ds, hvplat.Es, hvplat.Fs, hvplat.Gs,
             hvplat.Rflags, hvplat.Cr3
-        ])
+        )
 
         print 'rax=%016x rbx=%016x rcx=%016x' % (
             R[0].Reg64, R[1].Reg64, R[2].Reg64

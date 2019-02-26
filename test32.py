@@ -37,11 +37,11 @@ def main(argc, argv):
             GuestCodePageAddress
         )
 
-        Cr0, Gdtr, Idtr = Vp.GetRegisters((
+        Cr0, Gdtr, Idtr = Vp.GetRegisters(
             hv.Cr0,
             hv.Gdtr,
             hv.Idtr
-        ))
+        )
 
         print 'CR0:', hv.CR0(Cr0)
         print 'GDTR.Base:', hex(Gdtr.Table.Base)
@@ -67,10 +67,10 @@ def main(argc, argv):
         print 'Partition exited with:', ExitReason
         hv.DumpExitContext(ExitContext)
 
-        Rip, Rax = Vp.GetRegisters64((
-                hv.Rip,
-                hv.Rax
-        ))
+        Rip, Rax = Vp.GetRegisters64(
+            hv.Rip,
+            hv.Rax
+        )
 
         assert Rip == (CODE_GPA + 0x1337), '@rax(%x) does not match the magic value.' % Rax
         assert ExitReason.value == hv.WHvRunVpExitReasonException, 'An exception VMEXIT is expected when the int3 is triggered.'

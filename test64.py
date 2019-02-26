@@ -763,10 +763,10 @@ class FeatureTests(unittest.TestCase):
         self.Vp.SetRip(CodeGva)
 
         ExitContext, ExitReason = self.Vp.Run()
-        Rip, Rax = self.Vp.GetRegisters64((
+        Rip, Rax = self.Vp.GetRegisters64(
             hv.Rip,
             hv.Rax
-        ))
+        )
 
         ExpectedRax = N
         self.assertEqual(
@@ -799,10 +799,10 @@ class FeatureTests(unittest.TestCase):
         self.Vp.SetRip(Rip + len(Int3))
 
         ExitContext, _ = self.Vp.Run()
-        Rip, Rax = self.Vp.GetRegisters64((
+        Rip, Rax = self.Vp.GetRegisters64(
             hv.Rip,
             hv.Rax
-        ))
+        )
 
         ExpectedRax += 1
         self.assertEqual(
