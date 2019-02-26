@@ -36,6 +36,7 @@ def CreatePartition(Pages, PackedSpacePolicy, TebGva):
     }
 
     Partition = hv.WHvPartition(**PartitionOptions)
+    Vp = Partition.GetVp(0)
 
     # Let's enable long mode now...
     # https://wiki.osdev.org/Setting_Up_Long_Mode.
@@ -80,14 +81,12 @@ def CreatePartition(Pages, PackedSpacePolicy, TebGva):
     # 'Protected Mode Enable', 'Extension type', 'Numeric Error', 'Write Protect',
     # 'Alignment mask', 'Paging'.
     Cr0 = 0x80050031
-    Partition.SetRegisters(
-        0, {
-            hv.Cr0 : Cr0,
-            hv.Cr3 : Cr3,
-            hv.Cr4 : Cr4,
-            hv.Efer : Efer,
-        }
-    )
+    Vp.SetRegisters({
+        hv.Cr0 : Cr0,
+        hv.Cr3 : Cr3,
+        hv.Cr4 : Cr4,
+        hv.Efer : Efer,
+    })
 
     print 'Enabled 64-bit long mode'
 
@@ -102,17 +101,15 @@ def CreatePartition(Pages, PackedSpacePolicy, TebGva):
     # fs=0053
     TebSegment = hv.Generate64bUserDataSegment(TebGva)
 
-    Partition.SetRegisters(
-        0, {
-            hv.Cs : Cs,
-            hv.Ss : DataSegment,
-            hv.Ds : DataSegment,
-            hv.Es : DataSegment,
-            hv.Fs : DataSegment,
-            hv.Gs : TebSegment,
-            #_Rdx : 0, XXX Figure out where the 806e9 is coming from.
-        }
-    )
+    Vp.SetRegisters({
+        hv.Cs : Cs,
+        hv.Ss : DataSegment,
+        hv.Ds : DataSegment,
+        hv.Es : DataSegment,
+        hv.Fs : DataSegment,
+        hv.Gs : TebSegment,
+        #_Rdx : 0, XXX Figure out where the 806e9 is coming from.
+     })
 
     print 'Partition created:', Partition
     return Partition
@@ -160,10 +157,8 @@ class FeatureTests(unittest.TestCase):
 
         cls.Policy = PackedPhysicalMemory()
         cls.Partition = CreatePartition(cls.Pages, cls.Policy, cls.TebGva)
-        TranslationResult, cls.CodeHva = cls.Partition.TranslateGvaToHva(
-            0,
-            cls.CodeGva
-        )
+        cls.Vp = cls.Partition.GetVp(0)
+        TranslationResult, cls.CodeHva = cls.Vp.TranslateGvaToHva(cls.CodeGva)
 
         assert TranslationResult.value == hv.WHvTranslateGvaResultSuccess, 'The GVA->HVA translation should be a success'
 
@@ -175,15 +170,13 @@ class FeatureTests(unittest.TestCase):
 
     def test_readwrite_unmapped(self):
         '''Read from / to unmapped GVA.'''
-        self.assertFalse(self.Partition.WriteGva(
-                0,
+        self.assertFalse(self.Vp.WriteGva(
                 0,
                 'hello'
             ), 'The write to unmapped memory should fail.'
         )
 
-        self.assertIsNone(self.Partition.ReadGva(
-                0,
+        self.assertIsNone(self.Vp.ReadGva(
                 0,
                 0x1000
             ), 'The read to unmapped memory should fail.'
@@ -192,10 +185,7 @@ class FeatureTests(unittest.TestCase):
     def test_writegva_cross_pages(self):
         '''Read from and write to GVA space across two pages that are not contiguous
         in the host virtual space.'''
-        TranslationResult, Hva0 = self.Partition.TranslateGvaToHva(
-            0,
-            self.Page0Gva
-        )
+        TranslationResult, Hva0 = self.Vp.TranslateGvaToHva(self.Page0Gva)
 
         self.assertEqual(
             TranslationResult.value,
@@ -205,10 +195,7 @@ class FeatureTests(unittest.TestCase):
 
         self.assertIsNotNone(Hva0, 'The GVA->HVA translation should succeed.')
 
-        TranslationResult, Hva1 = self.Partition.TranslateGvaToHva(
-            0,
-            self.Page1Gva
-        )
+        TranslationResult, Hva1 = self.Vp.TranslateGvaToHva(self.Page1Gva)
 
         self.assertEqual(
             TranslationResult.value,
@@ -226,8 +213,7 @@ class FeatureTests(unittest.TestCase):
         Content = 'hello friends!'
         EndOffset = 0xff8
         Address = self.Page0Gva + EndOffset
-        self.assertTrue(self.Partition.WriteGva(
-            0,
+        self.assertTrue(self.Vp.WriteGva(
             Address,
             Content
         ))
@@ -242,8 +228,7 @@ class FeatureTests(unittest.TestCase):
             'The first and second bit should match the content.'
         )
 
-        ReadContent = self.Partition.ReadGva(
-            0,
+        ReadContent = self.Vp.ReadGva(
             self.Page0Gva + EndOffset,
             len(Content)
         )
@@ -255,8 +240,7 @@ class FeatureTests(unittest.TestCase):
 
     def test_snapshot_only_writeable(self):
         '''Ensure that the snapshot only restores / track pages that are writeable.'''
-        ByteSaved = self.Partition.ReadGva(
-            0,
+        ByteSaved = self.Vp.ReadGva(
             self.ReadOnlyGva,
             1
         )
@@ -264,8 +248,7 @@ class FeatureTests(unittest.TestCase):
         self.assertIsNotNone(ByteSaved, 'The ByteSaved should not be None.')
         Snapshot = self.Partition.Save()
 
-        self.assertTrue(self.Partition.WriteGva(
-            0,
+        self.assertTrue(self.Vp.WriteGva(
             self.ReadOnlyGva,
             '\xAA',
             Force = True
@@ -273,8 +256,7 @@ class FeatureTests(unittest.TestCase):
 
         self.Partition.Restore(Snapshot)
 
-        ByteRead = self.Partition.ReadGva(
-            0,
+        ByteRead = self.Vp.ReadGva(
             self.ReadOnlyGva,
             1
         )
@@ -286,8 +268,7 @@ class FeatureTests(unittest.TestCase):
 
         # Restore the orginal byte as it will never get its original value back
         # otherwise.
-        self.assertTrue(self.Partition.WriteGva(
-            0,
+        self.assertTrue(self.Vp.WriteGva(
             self.ReadOnlyGva,
             ByteSaved,
             Force = True
@@ -313,8 +294,7 @@ class FeatureTests(unittest.TestCase):
 
     def test_translate_gva_with_permcheck_kern(self):
         '''Translate a GVA->GPA and validate page permissions against a kernl page.'''
-        TranslationResult, _ = self.Partition.TranslateGva(
-            0,
+        TranslationResult, _ = self.Vp.TranslateGva(
             self.KernelPageGva,
             'r'
         )
@@ -325,8 +305,7 @@ class FeatureTests(unittest.TestCase):
             'The kernel page should not be readable from cpl3.'
         )
 
-        TranslationResult, _ = self.Partition.TranslateGva(
-            0,
+        TranslationResult, _ = self.Vp.TranslateGva(
             self.KernelPageGva,
             're'
         )
@@ -339,8 +318,7 @@ class FeatureTests(unittest.TestCase):
 
     def test_translate_gva_with_permcheck_rx(self):
         '''Translate a GVA->GPA and validate page permissions against a rx page.'''
-        TranslationResult, _ = self.Partition.TranslateGva(
-            0,
+        TranslationResult, _ = self.Vp.TranslateGva(
             self.CodeGva,
             'r'
         )
@@ -351,8 +329,7 @@ class FeatureTests(unittest.TestCase):
             'The code page should be marked as readable in the page tables.'
         )
 
-        TranslationResult, _ = self.Partition.TranslateGva(
-            0,
+        TranslationResult, _ = self.Vp.TranslateGva(
             self.CodeGva,
             'w'
         )
@@ -363,8 +340,7 @@ class FeatureTests(unittest.TestCase):
             'The code page page should not be marked as writeable in the page tables.'
         )
 
-        TranslationResult, _ = self.Partition.TranslateGva(
-            0,
+        TranslationResult, _ = self.Vp.TranslateGva(
             self.CodeGva,
             'x'
         )
@@ -375,8 +351,7 @@ class FeatureTests(unittest.TestCase):
             'The code page should be marked as executable in the page tables.'
         )
 
-        TranslationResult, _ = self.Partition.TranslateGva(
-            0,
+        TranslationResult, _ = self.Vp.TranslateGva(
             self.CodeGva,
             'rx'
         )
@@ -387,8 +362,7 @@ class FeatureTests(unittest.TestCase):
             'The code page should be marked as rw in the page tables.'
         )
 
-        TranslationResult, _ = self.Partition.TranslateGva(
-            0,
+        TranslationResult, _ = self.Vp.TranslateGva(
             self.CodeGva,
             'rwx'
         )
@@ -401,8 +375,7 @@ class FeatureTests(unittest.TestCase):
 
     def test_translate_gva_with_permcheck_rx(self):
         '''Translate a GVA->GPA and validate page permissions against a rx page.'''
-        TranslationResult, _ = self.Partition.TranslateGva(
-            0,
+        TranslationResult, _ = self.Vp.TranslateGva(
             self.CodeGva,
             'r'
         )
@@ -413,8 +386,7 @@ class FeatureTests(unittest.TestCase):
             'The code page should be marked as readable in the page tables.'
         )
 
-        TranslationResult, _ = self.Partition.TranslateGva(
-            0,
+        TranslationResult, _ = self.Vp.TranslateGva(
             self.CodeGva,
             'w'
         )
@@ -425,8 +397,7 @@ class FeatureTests(unittest.TestCase):
             'The code page page should not be marked as writeable in the page tables.'
         )
 
-        TranslationResult, _ = self.Partition.TranslateGva(
-            0,
+        TranslationResult, _ = self.Vp.TranslateGva(
             self.CodeGva,
             'x'
         )
@@ -437,8 +408,7 @@ class FeatureTests(unittest.TestCase):
             'The code page should be marked as executable in the page tables.'
         )
 
-        TranslationResult, _ = self.Partition.TranslateGva(
-            0,
+        TranslationResult, _ = self.Vp.TranslateGva(
             self.CodeGva,
             'rx'
         )
@@ -449,8 +419,7 @@ class FeatureTests(unittest.TestCase):
             'The code page should be marked as rw in the page tables.'
         )
 
-        TranslationResult, _ = self.Partition.TranslateGva(
-            0,
+        TranslationResult, _ = self.Vp.TranslateGva(
             self.CodeGva,
             'rwx'
         )
@@ -464,8 +433,7 @@ class FeatureTests(unittest.TestCase):
     def test_translate_gva_with_permcheck_ro(self):
         '''Translate a GVA->GPA and validate page permissions against a read-only
         page.'''
-        TranslationResult, _ = self.Partition.TranslateGva(
-            0,
+        TranslationResult, _ = self.Vp.TranslateGva(
             self.ReadOnlyGva,
             'r'
         )
@@ -476,8 +444,7 @@ class FeatureTests(unittest.TestCase):
             'The read-only page should be marked as readable in the page tables.'
         )
 
-        TranslationResult, _ = self.Partition.TranslateGva(
-            0,
+        TranslationResult, _ = self.Vp.TranslateGva(
             self.ReadOnlyGva,
             'w'
         )
@@ -488,8 +455,7 @@ class FeatureTests(unittest.TestCase):
             'The read-only page should not be marked as writeable in the page tables.'
         )
 
-        TranslationResult, _ = self.Partition.TranslateGva(
-            0,
+        TranslationResult, _ = self.Vp.TranslateGva(
             self.ReadOnlyGva,
             'x'
         )
@@ -500,8 +466,7 @@ class FeatureTests(unittest.TestCase):
             'The read-only page should not be marked as executable in the page tables.'
         )
 
-        TranslationResult, _ = self.Partition.TranslateGva(
-            0,
+        TranslationResult, _ = self.Vp.TranslateGva(
             self.ReadOnlyGva,
             'xe'
         )
@@ -516,22 +481,16 @@ class FeatureTests(unittest.TestCase):
         '''Clear the dirty bits of the pages.'''
         Code = WriteMemory64(self.TebGva, 1) + Int3
         ct.memmove(self.CodeHva, Code, len(Code))
-        self.Partition.SetRip(
-            0,
-            self.CodeGva
-        )
+        self.Vp.SetRip(self.CodeGva)
 
-        self.Partition.RunVp(0)
+        self.Vp.Run()
 
         DirtyGpas = self.Partition.QueryGpaRangeDirtyPages(
             0,
             len(self.Partition.TranslationTable) * 0x1000
         )
 
-        TranslationResult, TebGpa = self.Partition.TranslateGva(
-            0,
-            self.TebGva
-        )
+        TranslationResult, TebGpa = self.Vp.TranslateGva(self.TebGva)
 
         self.assertEqual(
             TranslationResult.value,
@@ -577,12 +536,9 @@ class FeatureTests(unittest.TestCase):
         NonCanonicalGva = 0xdeadbeefbaadc0de
         Code = ReadMemory64(NonCanonicalGva)
         ct.memmove(self.CodeHva, Code, len(Code))
-        self.Partition.SetRip(
-            0,
-            self.CodeGva
-        )
+        self.Vp.SetRip(self.CodeGva)
 
-        ExitContext, _ = self.Partition.RunVp(0)
+        ExitContext, _ = self.Vp.Run()
         VpException = ExitContext.VpException
 
         self.assertEqual(
@@ -603,12 +559,9 @@ class FeatureTests(unittest.TestCase):
         NonPresentGva = 1337
         Code = ReadMemory64(NonPresentGva)
         ct.memmove(self.CodeHva, Code, len(Code))
-        self.Partition.SetRip(
-            0,
-            self.CodeGva
-        )
+        self.Vp.SetRip(self.CodeGva)
 
-        ExitContext, _ = self.Partition.RunVp(0)
+        ExitContext, _ = self.Vp.Run()
         VpException = ExitContext.VpException
 
         self.assertEqual(
@@ -631,12 +584,9 @@ class FeatureTests(unittest.TestCase):
         '''Read from supervisor memory.'''
         Code = ReadMemory64(self.KernelPageGva) + Int3
         ct.memmove(self.CodeHva, Code, len(Code))
-        self.Partition.SetRip(
-            0,
-            self.CodeGva
-        )
+        self.Vp.SetRip(self.CodeGva)
 
-        ExitContext, _ = self.Partition.RunVp(0)
+        ExitContext, _ = self.Vp.Run()
         VpException = ExitContext.VpException
 
         self.assertEqual(
@@ -658,19 +608,15 @@ class FeatureTests(unittest.TestCase):
     def test_execute_readonly(self):
         '''Execute read-only memory.'''
         Content = IncRax + Int3
-        self.assertTrue(self.Partition.WriteGva(
-            0,
+        self.assertTrue(self.Vp.WriteGva(
             self.ReadOnlyGva,
             Content,
             Force = True
         ))
 
-        self.Partition.SetRip(
-            0,
-            self.ReadOnlyGva
-        )
+        self.Vp.SetRip(self.ReadOnlyGva)
 
-        ExitContext, _ = self.Partition.RunVp(0)
+        ExitContext, _ = self.Vp.Run()
         VpException = ExitContext.VpException
 
         self.assertEqual(
@@ -693,27 +639,22 @@ class FeatureTests(unittest.TestCase):
         '''Write to read-only memory.'''
         Value = 0xdeadbeefbaadc0de
         Content = struct.pack('<Q', Value)
-        self.assertTrue(self.Partition.WriteGva(
-            0,
+        self.assertTrue(self.Vp.WriteGva(
             self.ReadOnlyGva,
             Content,
             Force = True
         ))
 
         Code = WriteMemory64(self.ReadOnlyGva, Value) + Int3
-        self.assertTrue(self.Partition.WriteGva(
-            0,
+        self.assertTrue(self.Vp.WriteGva(
             self.CodeGva,
             Code,
             Force = True
         ))
 
-        self.Partition.SetRip(
-            0,
-            self.CodeGva
-        )
+        self.Vp.SetRip(self.CodeGva)
 
-        ExitContext, _ = self.Partition.RunVp(0)
+        ExitContext, _ = self.Vp.Run()
         VpException = ExitContext.VpException
         self.assertEqual(
             VpException.ExceptionType, hv.WHvX64ExceptionTypePageFault,
@@ -735,31 +676,23 @@ class FeatureTests(unittest.TestCase):
         '''Read from read-only memory.'''
         Value = 0xdeadbeefbaadc0de
         Content = struct.pack('<Q', Value)
-        self.assertTrue(self.Partition.WriteGva(
-            0,
+        self.assertTrue(self.Vp.WriteGva(
             self.ReadOnlyGva,
             Content,
             Force = True
         ))
 
         Code = ReadMemory64(self.ReadOnlyGva) + Int3
-        self.assertTrue(self.Partition.WriteGva(
-            0,
+        self.assertTrue(self.Vp.WriteGva(
             self.CodeGva,
             Code,
             Force = True
         ))
 
-        self.Partition.SetRip(
-            0,
-            self.CodeGva
-        )
+        self.Vp.SetRip(self.CodeGva)
 
-        ExitContext, _ = self.Partition.RunVp(0)
-        Rax = self.Partition.GetRegister64(
-            0,
-            hv.Rax
-        )
+        ExitContext, _ = self.Vp.Run()
+        Rax = self.Vp.GetRegister64(hv.Rax)
 
         self.assertEqual(
             Rax, Value,
@@ -770,24 +703,17 @@ class FeatureTests(unittest.TestCase):
         '''Read memory from the GS segment.'''
         TebValue = 0xdeadbeefbaadc0de
         TebContent = struct.pack('<Q', TebValue)
-        self.assertTrue(self.Partition.WriteGva(
-            0,
+        self.assertTrue(self.Vp.WriteGva(
             self.TebGva,
             TebContent
         ))
 
         Code = LoadGsInRax + Int3
         ct.memmove(self.CodeHva, Code, len(Code))
-        self.Partition.SetRip(
-            0,
-            self.CodeGva
-        )
+        self.Vp.SetRip(self.CodeGva)
 
-        ExitContext, _ = self.Partition.RunVp(0)
-        Rax = self.Partition.GetRegister64(
-            0,
-            hv.Rax
-        )
+        ExitContext, _ = self.Vp.Run()
+        Rax = self.Vp.GetRegister64(hv.Rax)
 
         self.assertEqual(
             Rax, TebValue,
@@ -798,10 +724,7 @@ class FeatureTests(unittest.TestCase):
         '''Run GVA translations on the partition.'''
         Gpas = []
         for Gva, _ in self.Pages:
-            ResultCode, Gpa = self.Partition.TranslateGva(
-                0,
-                Gva
-            )
+            ResultCode, Gpa = self.Vp.TranslateGva(Gva)
 
             self.assertEqual(
                 ResultCode.value, hv.WHvTranslateGvaResultSuccess,
@@ -837,18 +760,13 @@ class FeatureTests(unittest.TestCase):
         Code += Int3
 
         ct.memmove(self.CodeHva, Code, len(Code))
-        self.Partition.SetRip(
-            0,
-            CodeGva
-        )
+        self.Vp.SetRip(CodeGva)
 
-        ExitContext, ExitReason = self.Partition.RunVp(0)
-        Rip, Rax = self.Partition.GetRegisters64(
-            0, (
-                hv.Rip,
-                hv.Rax
-            )
-        )
+        ExitContext, ExitReason = self.Vp.Run()
+        Rip, Rax = self.Vp.GetRegisters64((
+            hv.Rip,
+            hv.Rax
+        ))
 
         ExpectedRax = N
         self.assertEqual(
@@ -878,15 +796,13 @@ class FeatureTests(unittest.TestCase):
         )
 
         # Successfully caught the first int3 interruption, stepping over it.
-        self.Partition.SetRip(0, Rip + len(Int3))
+        self.Vp.SetRip(Rip + len(Int3))
 
-        ExitContext, _ = self.Partition.RunVp(0)
-        Rip, Rax = self.Partition.GetRegisters64(
-            0, (
-                hv.Rip,
-                hv.Rax
-            )
-        )
+        ExitContext, _ = self.Vp.Run()
+        Rip, Rax = self.Vp.GetRegisters64((
+            hv.Rip,
+            hv.Rax
+        ))
 
         ExpectedRax += 1
         self.assertEqual(
@@ -944,29 +860,21 @@ class FeatureTests(unittest.TestCase):
 
     def test_save_restore_registers(self):
         '''Take a snapshot modify registers and restore it.'''
-        self.Partition.SetRegisters(
-            0, {
-                hv.Rax : 0xdeadbeefbaadc0de,
-                hv.Rbx : 0xdeadbeefbaadc0de,
-                hv.Rcx : 0xdeadbeefbaadc0de,
-                hv.Rip : 0xdeadbeefbaadc0de,
-                hv.Rsp : 0xdeadbeefbaadc0de
-            }
-        )
+        self.Vp.SetRegisters({
+            hv.Rax : 0xdeadbeefbaadc0de,
+            hv.Rbx : 0xdeadbeefbaadc0de,
+            hv.Rcx : 0xdeadbeefbaadc0de,
+            hv.Rip : 0xdeadbeefbaadc0de,
+            hv.Rsp : 0xdeadbeefbaadc0de
+        })
 
         Snapshot = self.Partition.Save()
-        InitRax = self.Partition.GetRegister64(
-            0,
-            hv.Rax
-        )
+        InitRax = self.Vp.GetRegister64(hv.Rax)
 
-        self.Partition.SetRegister(0, hv.Rax, 0xaaaaaaaaaaaaaaaa)
+        self.Vp.SetRegister(hv.Rax, 0xaaaaaaaaaaaaaaaa)
 
         self.Partition.Restore(Snapshot)
-        Rax = self.Partition.GetRegister64(
-            0,
-            hv.Rax
-        )
+        Rax = self.Vp.GetRegister64(hv.Rax)
 
         self.assertEqual(
             Rax, InitRax,
@@ -976,8 +884,7 @@ class FeatureTests(unittest.TestCase):
     def test_save_restore_memory(self):
         '''Take a snapshot modify memory and restore it.'''
         TebContent = '\xaa' * 8
-        self.assertTrue(self.Partition.WriteGva(
-            0,
+        self.assertTrue(self.Vp.WriteGva(
             self.TebGva,
             TebContent
         ))
@@ -987,14 +894,10 @@ class FeatureTests(unittest.TestCase):
         Code = WriteMemory64(self.TebGva, 0xbbbbbbbbbbbbbbbb) + Int3
         ct.memmove(self.CodeHva, Code, len(Code))
 
-        self.Partition.SetRip(
-            0,
-            self.CodeGva
-        )
+        self.Vp.SetRip(self.CodeGva)
 
-        self.Partition.RunVp(0)
-        self.assertEqual(self.Partition.ReadGva(
-                0,
+        self.Vp.Run()
+        self.assertEqual(self.Vp.ReadGva(
                 self.TebGva,
                 8
             ), '\xbb' * 8,
@@ -1005,16 +908,10 @@ class FeatureTests(unittest.TestCase):
 
         Code = ReadMemory64(self.TebGva) + Int3
         ct.memmove(self.CodeHva, Code, len(Code))
-        self.Partition.SetRip(
-            0,
-            self.CodeGva
-        )
+        self.Vp.SetRip(self.CodeGva)
 
-        self.Partition.RunVp(0)
-        Rax = self.Partition.GetRegister64(
-            0,
-            hv.Rax
-        )
+        self.Vp.Run()
+        Rax = self.Vp.GetRegister64(hv.Rax)
 
         self.assertEqual(
             Rax, 0xaaaaaaaaaaaaaaaa,
@@ -1070,10 +967,7 @@ class FeatureTests(unittest.TestCase):
         '''Ensure that a dirty page is turned non dirty after a snapshot. Also ensure
         that on restore it keeps non dirty.'''
         # Let's make sure the TEB page is clean.
-        TranslationResult, TebGpa = self.Partition.TranslateGva(
-            0,
-            self.TebGva
-        )
+        TranslationResult, TebGpa = self.Vp.TranslateGva(self.TebGva)
 
         self.assertEqual(
             TranslationResult.value,
@@ -1091,12 +985,9 @@ class FeatureTests(unittest.TestCase):
         # Dirty the TEB page.
         Code = WriteMemory64(self.TebGva, 1) + Int3
         ct.memmove(self.CodeHva, Code, len(Code))
-        self.Partition.SetRip(
-            0,
-            self.CodeGva
-        )
+        self.Vp.SetRip(self.CodeGva)
 
-        self.Partition.RunVp(0)
+        self.Vp.Run()
 
         # Ensure the page is dirty.
         Dirty = self.Partition.IsGpaDirty(TebGpa)
@@ -1120,12 +1011,9 @@ class FeatureTests(unittest.TestCase):
         # Dirty the TEB page.
         Code = WriteMemory64(self.TebGva, 1) + Int3
         ct.memmove(self.CodeHva, Code, len(Code))
-        self.Partition.SetRip(
-            0,
-            self.CodeGva
-        )
+        self.Vp.SetRip(self.CodeGva)
 
-        self.Partition.RunVp(0)
+        self.Vp.Run()
 
         # Ensure the page is dirty.
         Dirty = self.Partition.IsGpaDirty(TebGpa)

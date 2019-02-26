@@ -21,7 +21,8 @@ def main(argc, argv):
     with hv.WHvPartition(**PartitionOptions) as Partition:
         print 'Partition created:', Partition
 
-        InitialRip = Partition.GetRip(0)
+        Vp = Partition.GetVp(0)
+        InitialRip = Vp.GetRip()
         assert InitialRip == 0xfff0, 'The initial @rip(%x) does not match with expected value.' % InitialRip
         print 'Initial @rip in VP0:', hex(InitialRip)
 
@@ -36,12 +37,11 @@ def main(argc, argv):
             GuestCodePageAddress
         )
 
-        Cr0, Gdtr, Idtr = Partition.GetRegisters(0, (
-                hv.Cr0,
-                hv.Gdtr,
-                hv.Idtr
-            )
-        )
+        Cr0, Gdtr, Idtr = Vp.GetRegisters((
+            hv.Cr0,
+            hv.Gdtr,
+            hv.Idtr
+        ))
 
         print 'CR0:', hv.CR0(Cr0)
         print 'GDTR.Base:', hex(Gdtr.Table.Base)
@@ -50,31 +50,27 @@ def main(argc, argv):
         print 'IDTR.Limit:', hex(Idtr.Table.Limit)
         Idtr.Table.Base = IDT_GPA
 
-        Partition.SetRegisters(
-            0, {
-                hv.Rip : CODE_GPA,
-                hv.Cs : hv.Generate32bCodeSegment(),
-                hv.Idtr : Idtr,
-                #hv.Cr0 : Cr0.Reg64 | 1
-            }
-        )
+        Vp.SetRegisters({
+            hv.Rip : CODE_GPA,
+            hv.Cs : hv.Generate32bCodeSegment(),
+            hv.Idtr : Idtr,
+            #hv.Cr0 : Cr0.Reg64 | 1
+        })
         print 'Partition configured to run 32b kernel code'
 
-        Rip = Partition.GetRip(0)
+        Rip = Vp.GetRip()
         print '@rip in VP0:', hex(Rip)
         assert Rip == CODE_GPA, '@rip(%x) does not match what we assigned to it.' % Rip
 
-        ExitContext, ExitReason = Partition.RunVp(0)
-        Partition.DumpRegisters(0)
+        ExitContext, ExitReason = Vp.Run()
+        Vp.DumpRegisters()
         print 'Partition exited with:', ExitReason
         hv.DumpExitContext(ExitContext)
 
-        Rip, Rax = Partition.GetRegisters64(
-            0, (
+        Rip, Rax = Vp.GetRegisters64((
                 hv.Rip,
                 hv.Rax
-            )
-        )
+        ))
 
         assert Rip == (CODE_GPA + 0x1337), '@rax(%x) does not match the magic value.' % Rax
         assert ExitReason.value == hv.WHvRunVpExitReasonException, 'An exception VMEXIT is expected when the int3 is triggered.'
