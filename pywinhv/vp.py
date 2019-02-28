@@ -13,7 +13,7 @@ class WHvVirtualProcessor(object):
     def __init__(self, Handle, Partition, VpIndex):
         self.Handle = Handle
         self.Partition = Partition
-        self.Index = VpIndex
+        self.VpIndex = VpIndex
 
     def SetRegisters(self, Registers):
         '''Set registers in a VP.'''
@@ -25,9 +25,10 @@ class WHvVirtualProcessor(object):
 
         assert Success, 'WHvSetVirtualProcessorRegisters failed with: %s.' % hvplat.WHvReturn(Ret)
 
-    def GetIndex(self):
+    @property
+    def Index(self):
         '''Get the VP index.'''
-        return self.Index
+        return self.VpIndex
 
     def SetRegister(self, Register, Value):
         '''Set a register of a VP.'''

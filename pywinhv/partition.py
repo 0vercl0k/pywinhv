@@ -108,6 +108,17 @@ class WHvPartition(object):
 
             self.Processors.append(Vp)
 
+    @classmethod
+    def CreateDefault(cls, Name = 'default'):
+        '''Create a default partition with a single VP.'''
+
+        Partition = cls(
+            ProcessorCount = 1,
+            Name = Name,
+        )
+
+        return Partition
+
     def __enter__(self):
         return self
 
@@ -118,7 +129,7 @@ class WHvPartition(object):
         for Vp in self.Processors:
             Success, Ret = hvplat.WHvDeleteVirtualProcessor(
                 self.Handle,
-                Vp.GetIndex()
+                Vp.Index
             )
 
             assert Success, 'WHvDeleteVirtualProcessor failed in context manager with %x.' % Ret
@@ -327,7 +338,7 @@ class WHvPartition(object):
         for Vp in self.Processors:
             Registers = Vp.GetRegisters(hvplat.AllRegisters)
             Snapshot['VP'].append((
-                Vp.GetIndex(),
+                Vp.Index,
                 Registers
             ))
 

@@ -30,12 +30,7 @@ class PackedPhysicalMemory(object):
 
 def CreatePartition(Pages, PackedSpacePolicy, TebGva):
     '''Create a partition and configure it like a Windows 64bit environment.'''
-    PartitionOptions = {
-       'ProcessorCount' : 1,
-       'Name' : '64b user'
-    }
-
-    Partition = hv.WHvPartition(**PartitionOptions)
+    Partition = hv.WHvPartition.CreateDefault('64b user')
     Vp = Partition.GetVp(0)
 
     # Let's enable long mode now...
