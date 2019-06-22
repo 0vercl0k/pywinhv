@@ -271,7 +271,6 @@ class WHvPartition(object):
         assert Success, 'WHvGetPartitionCounters failed with: %s.' % hvplat.WHvReturn(Ret)
         return Counters
 
-
     def QueryGpaRangeDirtyBitmap(self, Gpa, RangeSize):
         '''Get a list of bits describing which physical guest page is dirty. One bit per
         page.'''
